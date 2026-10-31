@@ -16,7 +16,9 @@ import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
 import androidx.credentials.exceptions.ClearCredentialException;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
+import com.trojanrideshare.app.ui.search.SearchActivity;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -52,5 +54,16 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
         findViewById(R.id.signOutButton).setOnClickListener(v -> signOut());
+        findViewById(R.id.searchRidesButton).setOnClickListener(v -> {
+            Intent searchIntent = new Intent(MainActivity.this, SearchActivity.class);
+            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser != null) {
+                searchIntent.putExtra(
+                        SearchActivity.EXTRA_CURRENT_USER_ID,
+                        currentUser.getUid()
+                );
+            }
+            startActivity(searchIntent);
+        });
     }
 }

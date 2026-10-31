@@ -1,3 +1,18 @@
 <resources>
     <string name="app_name">TrojanRideshare</string>
+    <string name="search_title">Find a ride</string>
+    <string name="search_origin_hint">Origin keyword</string>
+    <string name="search_destination_hint">Destination keyword</string>
+    <string name="search_action">Search rides</string>
+    <string name="search_no_results">No matching rides found.</string>
+    <string name="search_untitled_ride">Untitled ride</string>
+    <string name="search_unknown_location">Unknown location</string>
+    <string name="search_unknown_time">Unknown time</string>
+    <string name="search_route_format">%1$s → %2$s</string>
+    <string name="search_departure_format">Departure: %1$s</string>
+    <string name="main_search_action">Find rides</string>
+    <plurals name="search_available_seats">
+        <item quantity="one">%d seat available</item>
+        <item quantity="other">%d seats available</item>
+    </plurals>
 </resources>
