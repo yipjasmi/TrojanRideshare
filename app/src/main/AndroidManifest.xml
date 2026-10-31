@@ -22,6 +22,9 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize">
         </activity>
+        <activity android:name=".ui.payment.PaymentsActivity" android:exported="false" />
+        <activity android:name=".ui.payment.RecordCostActivity" android:exported="false" />
+        <activity android:name=".ui.payment.RidePaymentActivity" android:exported="false" />
         <activity android:name=".ui.auth.LoginActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

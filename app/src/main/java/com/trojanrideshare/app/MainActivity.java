@@ -18,6 +18,7 @@ import androidx.credentials.exceptions.ClearCredentialException;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
+import com.trojanrideshare.app.ui.payment.PaymentsActivity;
 import com.trojanrideshare.app.ui.search.SearchActivity;
 import com.trojanrideshare.app.ui.search.OrganizerRequestsActivity;
 
@@ -80,5 +81,7 @@ public class MainActivity extends AppCompatActivity {
             }
             startActivity(requestsIntent);
         });
+        findViewById(R.id.paymentsButton).setOnClickListener(
+                v -> startActivity(new Intent(this, PaymentsActivity.class)));
     }
 }
