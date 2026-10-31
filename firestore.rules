@@ -1,0 +1,94 @@
+rules_version = '2';
+
+// Rules are OR'd together, so the payments and rides blocks only hold because the catch-all at the
+// bottom skips those two collections. Don't add a broader match without keeping that exclusion.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    match /rides/{rideId} {
+      allow read, create, delete: if signedIn();
+
+      // Only the organizer records the cost or hands the ride to someone else.
+      allow update: if signedIn()
+        && (resource.data.organizerId == uid()
+            || !request.resource.data.diff(resource.data).affectedKeys()
+                   .hasAny(['finalCost', 'organizerId']));
+    }
+
+    // One document per person per ride, id is {rideId}_{userId}.
+    match /payments/{paymentId} {
+
+      function isMine() {
+        return resource.data.userId == uid() || resource.data.organizerId == uid();
+      }
+
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function isSplitWrite() {
+        let share = request.resource.data;
+        let ride = get(/databases/$(database)/documents/rides/$(share.rideId)).data;
+        return paymentId == share.rideId + '_' + share.userId
+          && share.keys().hasOnly(['rideId', 'userId', 'organizerId', 'rideTitle', 'amount',
+                                   'paid', 'paidAt', 'assignedAt', 'flagged', 'flaggedAt'])
+          && share.organizerId == uid()
+          && ride.organizerId == uid()
+          && ride.status == 'completed'
+          && (share.userId == uid() || share.userId in ride.participantIds)
+          && share.amount is number
+          && share.amount >= 0
+          && share.amount <= 99999.99
+          && share.paid == (share.userId == uid() || share.amount == 0)
+          && share.paidAt == null
+          && share.assignedAt == request.time
+          && share.flagged == false
+          && share.flaggedAt == null;
+      }
+
+      function isMarkPaid() {
+        let share = request.resource.data;
+        return resource.data.userId == uid()
+          && resource.data.paid == false
+          && changedKeys().hasOnly(['paid', 'paidAt', 'flagged', 'flaggedAt'])
+          && share.paid == true
+          && share.paidAt == request.time
+          && share.flagged == false
+          && share.flaggedAt == null;
+      }
+
+      function isFlag() {
+        let share = request.resource.data;
+        return resource.data.organizerId == uid()
+          && resource.data.paid == false
+          && resource.data.flagged == false
+          && changedKeys().hasOnly(['flagged', 'flaggedAt'])
+          && request.time >= resource.data.assignedAt + duration.value(7, 'd')
+          && share.flagged == true
+          && share.flaggedAt == request.time;
+      }
+
+      // A missing share has to be readable too, the split transaction checks for one before
+      // the first save.
+      allow get: if signedIn() && (resource == null || isMine());
+      allow list: if signedIn() && isMine();
+      allow create: if signedIn() && isSplitWrite();
+      allow update: if signedIn()
+        && ((resource.data.paidAt == null && isSplitWrite()) || isMarkPaid() || isFlag());
+      allow delete: if false;
+    }
+
+    // Everything else stays open to signed-in students until its owner tightens it.
+    match /{collection}/{document=**} {
+      allow read, write: if signedIn() && collection != 'payments' && collection != 'rides';
+    }
+  }
+}
