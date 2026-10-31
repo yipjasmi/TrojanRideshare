@@ -8,7 +8,38 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import android.content.Intent;
+import android.os.CancellationSignal;
+import androidx.core.content.ContextCompat;
+import androidx.credentials.ClearCredentialStateRequest;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.exceptions.ClearCredentialException;
+import com.google.firebase.auth.FirebaseAuth;
+import com.trojanrideshare.app.ui.auth.LoginActivity;
+
 public class MainActivity extends AppCompatActivity {
+
+    private void signOut() {
+        FirebaseAuth.getInstance().signOut();
+        CredentialManager.create(this).clearCredentialStateAsync(
+                new ClearCredentialStateRequest(),
+                new CancellationSignal(),
+                ContextCompat.getMainExecutor(this),
+                new CredentialManagerCallback<Void, ClearCredentialException>() {
+                    @Override
+                    public void onResult(Void result) {
+                        startActivity(new Intent(MainActivity.this, LoginActivity.class));
+                        finish();
+                    }
+
+                    @Override
+                    public void onError(ClearCredentialException e) {
+                        startActivity(new Intent(MainActivity.this, LoginActivity.class));
+                        finish();
+                    }
+                });
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -20,5 +51,6 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+        findViewById(R.id.signOutButton).setOnClickListener(v -> signOut());
     }
 }
