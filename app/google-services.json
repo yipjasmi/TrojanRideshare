@@ -12,7 +12,20 @@
           "package_name": "com.trojanrideshare.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "918200028094-gcoqch6biat0i95a88g1efujpp1g53b3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.trojanrideshare.app",
+            "certificate_hash": "8b7d3786b5b9c69353c7e0a9ebb99cb9f4e9ce1f"
+          }
+        },
+        {
+          "client_id": "918200028094-s0usrpfum2uv27i0u9mkpt60c674ojlv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDRgwh84m8cOqgjE9sI6Noo5KPwmuhC0-I"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "918200028094-s0usrpfum2uv27i0u9mkpt60c674ojlv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
