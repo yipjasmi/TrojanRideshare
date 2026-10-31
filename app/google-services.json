@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "918200028094-ue2n95pd9a30k3r7juq3mfeish8rhu2t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.trojanrideshare.app",
+            "certificate_hash": "7c085fc39ff001ecd8adde13c164e72c1672f26b"
+          }
+        },
+        {
           "client_id": "918200028094-s0usrpfum2uv27i0u9mkpt60c674ojlv.apps.googleusercontent.com",
           "client_type": 3
         }
