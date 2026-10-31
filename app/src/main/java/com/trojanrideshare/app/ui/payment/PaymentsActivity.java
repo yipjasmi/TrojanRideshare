@@ -18,8 +18,6 @@ import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.util.Money;
 
-import java.util.List;
-
 public class PaymentsActivity extends AppCompatActivity {
 
     // Each list owns its rows, error and retry, so one failed load can't blank the other.

@@ -8,7 +8,10 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.MetadataChanges;
 import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.util.Money;
@@ -56,7 +59,9 @@ public class PaymentRepository {
                 .whereEqualTo("organizerId", organizerId)
                 .whereEqualTo("status", Ride.STATUS_COMPLETED)
                 .get()
-                .onSuccessTask(snapshot -> Tasks.forResult(snapshot.toObjects(Ride.class)));
+                .onSuccessTask(snapshot -> isUnknown(snapshot)
+                        ? Tasks.forException(offline())
+                        : Tasks.forResult(snapshot.toObjects(Ride.class)));
     }
 
     public Task<List<Payment>> getSharesFor(String userId) {
@@ -73,26 +78,33 @@ public class PaymentRepository {
 
     public void listenToRideShares(Activity owner, String rideId, String organizerId,
                                    SharesListener listener) {
-        rideSharesQuery(rideId, organizerId).addSnapshotListener(owner, (snapshot, error) -> {
-            if (error != null) {
-                listener.onShares(Collections.emptyList(), error);
-            } else {
-                listener.onShares(snapshot.toObjects(Payment.class), null);
-            }
-        });
+        rideSharesQuery(rideId, organizerId).addSnapshotListener(owner, MetadataChanges.INCLUDE,
+                (snapshot, error) -> {
+                    if (error != null) {
+                        listener.onShares(Collections.emptyList(), error);
+                    } else if (isUnknown(snapshot)) {
+                        listener.onShares(Collections.emptyList(), offline());
+                    } else {
+                        listener.onShares(snapshot.toObjects(Payment.class), null);
+                    }
+                });
     }
 
     public void listenToShare(Activity owner, String rideId, String userId,
                               SharesListener listener) {
-        shareRef(paymentId(rideId, userId)).addSnapshotListener(owner, (snapshot, error) -> {
-            if (error != null) {
-                listener.onShares(Collections.emptyList(), error);
-            } else if (snapshot.exists()) {
-                listener.onShares(Collections.singletonList(snapshot.toObject(Payment.class)), null);
-            } else {
-                listener.onShares(Collections.emptyList(), null);
-            }
-        });
+        shareRef(paymentId(rideId, userId)).addSnapshotListener(owner, MetadataChanges.INCLUDE,
+                (snapshot, error) -> {
+                    if (error != null) {
+                        listener.onShares(Collections.emptyList(), error);
+                    } else if (snapshot.exists()) {
+                        listener.onShares(
+                                Collections.singletonList(snapshot.toObject(Payment.class)), null);
+                    } else if (snapshot.getMetadata().isFromCache()) {
+                        listener.onShares(Collections.emptyList(), offline());
+                    } else {
+                        listener.onShares(Collections.emptyList(), null);
+                    }
+                });
     }
 
     public Task<Map<String, String>> getNames(Collection<String> userIds) {
@@ -192,7 +204,19 @@ public class PaymentRepository {
     }
 
     private Task<List<Payment>> getShares(Query query) {
-        return query.get().onSuccessTask(snapshot ->
-                Tasks.forResult(snapshot.toObjects(Payment.class)));
+        return query.get().onSuccessTask(snapshot -> isUnknown(snapshot)
+                ? Tasks.forException(offline())
+                : Tasks.forResult(snapshot.toObjects(Payment.class)));
+    }
+
+    // Offline with nothing cached, Firestore answers with an empty result instead of an error.
+    // Passing that on would tell someone they owe nothing when we just can't check.
+    private static boolean isUnknown(QuerySnapshot snapshot) {
+        return snapshot.isEmpty() && snapshot.getMetadata().isFromCache();
+    }
+
+    private static FirebaseFirestoreException offline() {
+        return new FirebaseFirestoreException(
+                "Offline with nothing cached", FirebaseFirestoreException.Code.UNAVAILABLE);
     }
 }

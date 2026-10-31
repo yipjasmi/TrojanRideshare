@@ -35,6 +35,7 @@ import java.util.Map;
 
 public class RecordCostActivity extends AppCompatActivity {
     private static final String EXTRA_RIDE_ID = "rideId";
+    private static final String STATE_CUSTOM_AMOUNTS = "customAmounts";
 
     public static Intent intent(Context context, String rideId) {
         return new Intent(context, RecordCostActivity.class).putExtra(EXTRA_RIDE_ID, rideId);
@@ -65,6 +66,7 @@ public class RecordCostActivity extends AppCompatActivity {
     private String rideId;
     private String uid;
     private PaymentService.RideDetails details;
+    private ArrayList<String> restoredCustomAmounts;
     private boolean saving;
 
     private View stateContainer;
@@ -102,6 +104,10 @@ public class RecordCostActivity extends AppCompatActivity {
         formError = findViewById(R.id.formError);
         reviewButton = findViewById(R.id.reviewButton);
 
+        if (savedInstanceState != null) {
+            restoredCustomAmounts = savedInstanceState.getStringArrayList(STATE_CUSTOM_AMOUNTS);
+        }
+
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         rideId = getIntent().getStringExtra(EXTRA_RIDE_ID);
         if (user == null || rideId == null) {
@@ -119,6 +125,17 @@ public class RecordCostActivity extends AppCompatActivity {
         });
         reviewButton.setOnClickListener(v -> review());
         load();
+    }
+
+    // The rows are built after loading, so Android can't restore what was typed into them.
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        ArrayList<String> amounts = new ArrayList<>();
+        for (SplitRow row : rows) {
+            amounts.add(text(row.customInput));
+        }
+        outState.putStringArrayList(STATE_CUSTOM_AMOUNTS, amounts);
     }
 
     private void load() {
@@ -161,11 +178,17 @@ public class RecordCostActivity extends AppCompatActivity {
             splitRows.addView(view);
         }
 
-        prefillExistingSplit();
+        if (restoredCustomAmounts != null && restoredCustomAmounts.size() == rows.size()) {
+            for (int i = 0; i < rows.size(); i++) {
+                rows.get(i).customInput.setText(restoredCustomAmounts.get(i));
+            }
+        } else {
+            prefillExistingSplit();
+        }
         formScroll.setVisibility(View.VISIBLE);
         formFooter.setVisibility(View.VISIBLE);
         stateContainer.setVisibility(View.GONE);
-        refreshPreview();
+        onSplitModeChanged();
     }
 
     // Opening this screen for an existing split starts from what was saved.
@@ -195,6 +218,10 @@ public class RecordCostActivity extends AppCompatActivity {
     }
 
     private void onSplitModeChanged() {
+        // Android restores the fields on rotation before the ride has loaded.
+        if (rows.isEmpty()) {
+            return;
+        }
         boolean custom = isCustom();
         PaymentValidator.Result cost = PaymentValidator.finalCost(text(costInput));
         long[] even = cost.isValid() ? CostSplitter.even(cost.cents, rows.size()) : null;
@@ -211,6 +238,9 @@ public class RecordCostActivity extends AppCompatActivity {
     }
 
     private void refreshPreview() {
+        if (rows.isEmpty()) {
+            return;
+        }
         PaymentValidator.Result cost = PaymentValidator.finalCost(text(costInput));
         formError.setVisibility(View.GONE);
         costLayout.setError(null);
@@ -318,7 +348,9 @@ public class RecordCostActivity extends AppCompatActivity {
                         showFormError(PaymentUi.errorMessage(this, task.getException()));
                         return;
                     }
-                    startActivity(RidePaymentActivity.intent(this, rideId));
+                    // Editing came from that screen, so go back to it instead of stacking a copy.
+                    startActivity(RidePaymentActivity.intent(this, rideId).addFlags(
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
                     finish();
                 });
     }
@@ -326,6 +358,7 @@ public class RecordCostActivity extends AppCompatActivity {
     private void setSaving(boolean value) {
         saving = value;
         reviewButton.setEnabled(!value);
+        reviewButton.setText(value ? R.string.payment_saving : R.string.payment_review);
     }
 
     private void showFormError(String message) {

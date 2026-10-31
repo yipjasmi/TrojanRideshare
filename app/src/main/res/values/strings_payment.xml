@@ -30,7 +30,6 @@
 
     <!-- Share statuses -->
     <string name="payment_status_unpaid">Unpaid</string>
-    <string name="payment_status_paid">Paid</string>
     <string name="payment_status_paid_on">Paid %1$s</string>
     <string name="payment_status_nothing_owed">Nothing owed</string>
     <string name="payment_status_fronted">Paid the fare</string>
@@ -40,8 +39,8 @@
     <!-- Record final cost -->
     <string name="payment_record_title">Record final cost</string>
     <string name="payment_cost_label">Final cost</string>
-    <string name="payment_split_even">Split evenly</string>
-    <string name="payment_split_custom">Custom amounts</string>
+    <string name="payment_split_even">Evenly</string>
+    <string name="payment_split_custom">Custom</string>
     <string name="payment_split_group_label">How to split the cost</string>
     <string name="payment_who_pays">Who pays what</string>
     <string name="payment_amount_label">Amount</string>
@@ -57,7 +56,8 @@
     <string name="payment_review_total">Final cost: %1$s</string>
     <string name="payment_review_note">Riders reimburse you outside the app. You can edit this until a rider marks their share paid.</string>
     <string name="payment_review_save">Save split</string>
-    <string name="payment_review_back">Keep editing</string>
+    <string name="payment_review_back">Back</string>
+    <string name="payment_saving">Saving…</string>
 
     <!-- Ride payment -->
     <string name="payment_ride_title">Ride payment</string>
@@ -65,12 +65,11 @@
     <string name="payment_your_share">Your share</string>
     <string name="payment_of_final_cost">of the %1$s final cost</string>
     <string name="payment_outstanding">Still owed to you</string>
-    <string name="payment_outstanding_row">%1$s outstanding</string>
     <string name="payment_no_cost_yet">No final cost yet</string>
     <string name="payment_no_cost_yet_rider">%1$s hasn\'t recorded the final cost yet.</string>
     <string name="payment_no_cost_yet_organizer">Record what the ride cost so each rider can see their share.</string>
     <string name="payment_not_participant">You\'re not on this ride.</string>
-    <string name="payment_shares_title">Riders</string>
+    <string name="payment_shares_title">Participants</string>
     <string name="payment_outside_app">Payment happens outside the app, on Venmo or in cash. This only tracks who has paid.</string>
     <string name="payment_reimburse">Reimburse %1$s outside the app, then mark it here.</string>
     <string name="payment_mark_paid">Mark as paid</string>

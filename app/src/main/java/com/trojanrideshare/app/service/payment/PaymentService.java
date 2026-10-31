@@ -44,7 +44,9 @@ public class PaymentService {
     public static List<String> participantsOf(Ride ride) {
         Set<String> participants = new LinkedHashSet<>();
         participants.add(ride.organizerId);
-        participants.addAll(ride.participantIds);
+        if (ride.participantIds != null) {
+            participants.addAll(ride.participantIds);
+        }
         return new ArrayList<>(participants);
     }
 

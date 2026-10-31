@@ -39,6 +39,7 @@
             android:layout_height="wrap_content"
             android:fontFeatureSettings="tnum"
             android:inputType="numberDecimal"
-            android:maxLength="12" />
+            android:maxLength="12"
+            android:saveEnabled="false" />
     </com.google.android.material.textfield.TextInputLayout>
 </LinearLayout>
