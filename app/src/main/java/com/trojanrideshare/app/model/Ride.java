@@ -2,6 +2,7 @@ package com.trojanrideshare.app.model;
 
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentId;
+import com.google.firebase.firestore.Exclude;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,10 +23,21 @@ public class Ride {
     public int maxRiders;
     public double expectedCost;
     public String status;
-    public String capacityStatus;
+    @Deprecated @Exclude public String capacityStatus;
     public List<String> participantIds = new ArrayList<>();
     public Double finalCost;
     public Timestamp createdAt;
 
     public Ride() {}
+
+    @Exclude
+    public int getAvailableSeats() {
+        int participantCount = participantIds == null ? 0 : participantIds.size();
+        return Math.max(0, maxRiders - participantCount);
+    }
+
+    @Exclude
+    public String getDerivedCapacityStatus() {
+        return getAvailableSeats() == 0 ? CAPACITY_FULL : CAPACITY_OPEN;
+    }
 }

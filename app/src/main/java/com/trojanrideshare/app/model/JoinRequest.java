@@ -7,6 +7,7 @@ public class JoinRequest {
     public static final String PENDING = "pending";
     public static final String ACCEPTED = "accepted";
     public static final String REJECTED = "rejected";
+    public static final String CANCELLED = "cancelled";
 
     @DocumentId public String id;
     public String rideId;

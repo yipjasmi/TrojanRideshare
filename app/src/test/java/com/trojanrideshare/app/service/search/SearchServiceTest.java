@@ -5,12 +5,16 @@ import static org.junit.Assert.assertEquals;
 import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.SearchCriteria;
+import com.trojanrideshare.app.model.SortOption;
+import com.google.firebase.Timestamp;
 
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 public class SearchServiceTest {
@@ -130,6 +134,91 @@ public class SearchServiceTest {
         assertEquals(Collections.singletonList(valid), input);
     }
 
+    @Test
+    public void filterRides_filtersDateTimeAndAvailableSeats() {
+        Ride match = timedRide("match", 2026, Calendar.NOVEMBER, 2, 10, 30, 4, 1);
+        Ride tooEarly = timedRide("too-early", 2026, Calendar.NOVEMBER, 2, 7, 30, 4, 1);
+        Ride tooFewSeats = timedRide("too-few", 2026, Calendar.NOVEMBER, 2, 11, 0, 2, 1);
+        Ride wrongDate = timedRide("wrong-date", 2026, Calendar.NOVEMBER, 4, 10, 30, 4, 1);
+
+        long startDate = millis(2026, Calendar.NOVEMBER, 2, 0, 0);
+        long endDate = millis(2026, Calendar.NOVEMBER, 3, 23, 59);
+        SearchCriteria criteria = criteria(
+                null,
+                null,
+                0,
+                startDate,
+                endDate,
+                9 * 60,
+                12 * 60,
+                2,
+                SortOption.DEPARTURE_EARLIEST
+        );
+
+        List<Ride> results = SearchService.filterRides(
+                Arrays.asList(tooEarly, tooFewSeats, wrongDate, match),
+                criteria,
+                CURRENT_USER
+        );
+
+        assertEquals(Collections.singletonList(match), results);
+    }
+
+    @Test
+    public void filterRides_sortsByEarliestAndLatestDeparture() {
+        Ride early = timedRide("early", 2026, Calendar.NOVEMBER, 2, 8, 0, 4, 1);
+        Ride late = timedRide("late", 2026, Calendar.NOVEMBER, 2, 18, 0, 4, 1);
+
+        List<Ride> earliest = SearchService.filterRides(
+                Arrays.asList(late, early),
+                criteria(null, null, 0, null, null, null, null, 0,
+                        SortOption.DEPARTURE_EARLIEST),
+                CURRENT_USER
+        );
+        List<Ride> latest = SearchService.filterRides(
+                Arrays.asList(early, late),
+                criteria(null, null, 0, null, null, null, null, 0,
+                        SortOption.DEPARTURE_LATEST),
+                CURRENT_USER
+        );
+
+        assertEquals(Arrays.asList(early, late), earliest);
+        assertEquals(Arrays.asList(late, early), latest);
+    }
+
+    @Test
+    public void filterRides_filtersAndSortsByRouteDistance() {
+        PlaceInfo preferredOrigin = place("USC", 34.0224, -118.2851);
+        PlaceInfo preferredDestination = place("LAX", 33.9416, -118.4085);
+        Ride near = timedRide("near", 2026, Calendar.NOVEMBER, 2, 10, 0, 4, 1);
+        near.origin = place("Near USC", 34.0230, -118.2860);
+        near.destination = place("Near LAX", 33.9420, -118.4090);
+        Ride farther = timedRide("farther", 2026, Calendar.NOVEMBER, 2, 9, 0, 4, 1);
+        farther.origin = place("Downtown", 34.0522, -118.2437);
+        farther.destination = place("El Segundo", 33.9192, -118.4165);
+        Ride outsideLimit = timedRide("outside", 2026, Calendar.NOVEMBER, 2, 8, 0, 4, 1);
+        outsideLimit.origin = place("San Francisco", 37.7749, -122.4194);
+        outsideLimit.destination = place("Oakland", 37.8044, -122.2712);
+
+        List<Ride> results = SearchService.filterRides(
+                Arrays.asList(farther, outsideLimit, near),
+                criteria(
+                        preferredOrigin,
+                        preferredDestination,
+                        10,
+                        null,
+                        null,
+                        null,
+                        null,
+                        0,
+                        SortOption.ROUTE_PROXIMITY
+                ),
+                CURRENT_USER
+        );
+
+        assertEquals(Arrays.asList(near, farther), results);
+    }
+
     private static Ride ride(
             String id,
             String origin,
@@ -154,5 +243,72 @@ public class SearchServiceTest {
         PlaceInfo place = new PlaceInfo();
         place.address = address;
         return place;
+    }
+
+    private static PlaceInfo place(String address, double lat, double lng) {
+        PlaceInfo place = place(address);
+        place.lat = lat;
+        place.lng = lng;
+        return place;
+    }
+
+    private static Ride timedRide(
+            String id,
+            int year,
+            int month,
+            int day,
+            int hour,
+            int minute,
+            int maxRiders,
+            int participantCount
+    ) {
+        List<String> participants = new ArrayList<>();
+        for (int index = 0; index < participantCount; index++) {
+            participants.add("participant-" + index);
+        }
+        Ride ride = ride(
+                id,
+                "USC",
+                "LAX",
+                "organizer",
+                Ride.STATUS_ON_TIME,
+                maxRiders,
+                participants
+        );
+        ride.departureTime = new Timestamp(new Date(millis(year, month, day, hour, minute)));
+        return ride;
+    }
+
+    private static long millis(int year, int month, int day, int hour, int minute) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.clear();
+        calendar.set(year, month, day, hour, minute);
+        return calendar.getTimeInMillis();
+    }
+
+    private static SearchCriteria criteria(
+            PlaceInfo preferredOrigin,
+            PlaceInfo preferredDestination,
+            double maximumDistanceMiles,
+            Long startDateMillis,
+            Long endDateMillis,
+            Integer earliestDepartureMinute,
+            Integer latestDepartureMinute,
+            int minimumSeats,
+            SortOption sortOption
+    ) {
+        return new SearchCriteria(
+                "",
+                "",
+                preferredOrigin,
+                preferredDestination,
+                maximumDistanceMiles,
+                startDateMillis,
+                endDateMillis,
+                earliestDepartureMinute,
+                latestDepartureMinute,
+                minimumSeats,
+                sortOption
+        );
     }
 }
