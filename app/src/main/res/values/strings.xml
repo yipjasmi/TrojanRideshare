@@ -41,6 +41,14 @@
     <string name="join_request_pending">Pending organizer approval</string>
     <string name="join_request_success">Your join request was sent.</string>
     <string name="join_request_duplicate">You already requested this ride.</string>
+    <string name="join_request_cancel_action">Cancel request</string>
+    <string name="join_request_cancel_title">Cancel join request?</string>
+    <string name="join_request_cancel_message">Your request for %1$s is still pending. You can request this ride again later.</string>
+    <string name="join_request_keep">Keep request</string>
+    <string name="join_request_cancelling">Canceling…</string>
+    <string name="join_request_cancelled">Your join request was canceled.</string>
+    <string name="join_request_not_pending">This request is no longer pending. The ride list was refreshed.</string>
+    <string name="join_request_status_error">Unable to load your pending request status.</string>
     <string name="cancel">Cancel</string>
     <string name="main_search_action">Find rides</string>
     <string-array name="search_seat_options">

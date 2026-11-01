@@ -8,11 +8,23 @@ import com.trojanrideshare.app.model.Ride;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public class JoinRequestService {
     public interface Callback {
         void onSuccess(JoinRequest request);
         void onAlreadyRequested();
+        void onError(String message);
+    }
+
+    public interface CancelCallback {
+        void onSuccess();
+        void onNotPending();
+        void onError(String message);
+    }
+
+    public interface PendingRequestsCallback {
+        void onSuccess(Set<String> rideIds);
         void onError(String message);
     }
 
@@ -66,6 +78,66 @@ public class JoinRequestService {
                 callback.onError("Unable to send your request. Please try again.");
             }
         });
+    }
+
+    public void cancel(
+            String rideId,
+            String requesterId,
+            CancelCallback callback
+    ) {
+        if (rideId == null || rideId.trim().isEmpty()) {
+            callback.onError("This ride is unavailable.");
+            return;
+        }
+        if (requesterId == null || requesterId.trim().isEmpty()) {
+            callback.onError("You must be signed in to cancel a request.");
+            return;
+        }
+
+        repository.cancel(
+                rideId.trim(),
+                requesterId.trim(),
+                new JoinRequestRepository.CancelCallback() {
+                    @Override
+                    public void onSuccess() {
+                        callback.onSuccess();
+                    }
+
+                    @Override
+                    public void onFailure(JoinRequestRepository.Failure failure) {
+                        callback.onNotPending();
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        callback.onError("Unable to cancel your request. Please try again.");
+                    }
+                }
+        );
+    }
+
+    public void loadPendingRideIds(
+            String requesterId,
+            PendingRequestsCallback callback
+    ) {
+        if (requesterId == null || requesterId.trim().isEmpty()) {
+            callback.onError("You must be signed in to load your requests.");
+            return;
+        }
+        repository.loadPendingRideIds(
+                requesterId.trim(),
+                new JoinRequestRepository.PendingRequestsCallback() {
+                    @Override
+                    public void onSuccess(Set<String> rideIds) {
+                        callback.onSuccess(rideIds);
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        callback.onError("Unable to load your pending requests.");
+                    }
+                }
+        );
     }
 
     static String validationError(Ride ride, String requesterId, String message) {

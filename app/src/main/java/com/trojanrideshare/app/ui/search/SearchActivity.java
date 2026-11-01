@@ -41,6 +41,7 @@ import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.service.search.SearchService;
 
 import java.text.DateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
@@ -70,6 +71,7 @@ public class SearchActivity extends AppCompatActivity {
     private SearchService searchService;
     private JoinRequestService joinRequestService;
     private final Set<String> requestedRideIds = new HashSet<>();
+    private List<Ride> displayedRides = Collections.emptyList();
 
     private PlaceInfo preferredOrigin;
     private PlaceInfo preferredDestination;
@@ -118,6 +120,7 @@ public class SearchActivity extends AppCompatActivity {
         findViewById(R.id.searchButton).setOnClickListener(view -> search());
         findViewById(R.id.clearFiltersButton).setOnClickListener(view -> clearFilters());
 
+        loadPendingJoinRequests();
         search();
     }
 
@@ -376,6 +379,7 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     private void renderResults(List<Ride> rides) {
+        displayedRides = new ArrayList<>(rides);
         resultsContainer.removeAllViews();
         if (rides.isEmpty()) {
             resultMessage.setText(R.string.search_no_results);
@@ -414,11 +418,9 @@ public class SearchActivity extends AppCompatActivity {
         Button requestButton = item.findViewById(R.id.joinRequestButton);
         TextView requestStatus = item.findViewById(R.id.joinRequestStatus);
         if (requestedRideIds.contains(ride.id)) {
-            showPendingState(requestButton, requestStatus);
+            showPendingState(ride, requestButton, requestStatus);
         } else {
-            requestButton.setOnClickListener(
-                    view -> showJoinRequestDialog(ride, requestButton, requestStatus)
-            );
+            showAvailableState(ride, requestButton, requestStatus);
         }
     }
 
@@ -470,7 +472,7 @@ public class SearchActivity extends AppCompatActivity {
                     @Override
                     public void onSuccess(com.trojanrideshare.app.model.JoinRequest request) {
                         requestedRideIds.add(ride.id);
-                        showPendingState(requestButton, requestStatus);
+                        showPendingState(ride, requestButton, requestStatus);
                         Toast.makeText(
                                 SearchActivity.this,
                                 R.string.join_request_success,
@@ -481,7 +483,7 @@ public class SearchActivity extends AppCompatActivity {
                     @Override
                     public void onAlreadyRequested() {
                         requestedRideIds.add(ride.id);
-                        showPendingState(requestButton, requestStatus);
+                        showPendingState(ride, requestButton, requestStatus);
                         Toast.makeText(
                                 SearchActivity.this,
                                 R.string.join_request_duplicate,
@@ -499,10 +501,112 @@ public class SearchActivity extends AppCompatActivity {
         );
     }
 
-    private void showPendingState(Button button, TextView status) {
-        button.setEnabled(false);
-        button.setText(R.string.join_request_sent);
+    private void loadPendingJoinRequests() {
+        joinRequestService.loadPendingRideIds(
+                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID),
+                new JoinRequestService.PendingRequestsCallback() {
+                    @Override
+                    public void onSuccess(Set<String> rideIds) {
+                        requestedRideIds.clear();
+                        requestedRideIds.addAll(rideIds);
+                        if (!displayedRides.isEmpty()) {
+                            renderResults(displayedRides);
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Toast.makeText(
+                                SearchActivity.this,
+                                R.string.join_request_status_error,
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+                }
+        );
+    }
+
+    private void showCancelRequestDialog(
+            Ride ride,
+            Button requestButton,
+            TextView requestStatus
+    ) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.join_request_cancel_title)
+                .setMessage(getString(
+                        R.string.join_request_cancel_message,
+                        emptyFallback(ride.title, getString(R.string.search_untitled_ride))
+                ))
+                .setNegativeButton(R.string.join_request_keep, null)
+                .setPositiveButton(
+                        R.string.join_request_cancel_action,
+                        (dialog, which) -> cancelJoinRequest(
+                                ride,
+                                requestButton,
+                                requestStatus
+                        )
+                )
+                .show();
+    }
+
+    private void cancelJoinRequest(
+            Ride ride,
+            Button requestButton,
+            TextView requestStatus
+    ) {
+        requestButton.setEnabled(false);
+        requestButton.setText(R.string.join_request_cancelling);
+        joinRequestService.cancel(
+                ride.id,
+                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID),
+                new JoinRequestService.CancelCallback() {
+                    @Override
+                    public void onSuccess() {
+                        requestedRideIds.remove(ride.id);
+                        showAvailableState(ride, requestButton, requestStatus);
+                        Toast.makeText(
+                                SearchActivity.this,
+                                R.string.join_request_cancelled,
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+
+                    @Override
+                    public void onNotPending() {
+                        requestedRideIds.remove(ride.id);
+                        Toast.makeText(
+                                SearchActivity.this,
+                                R.string.join_request_not_pending,
+                                Toast.LENGTH_LONG
+                        ).show();
+                        search();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        showPendingState(ride, requestButton, requestStatus);
+                        Toast.makeText(SearchActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                }
+        );
+    }
+
+    private void showPendingState(Ride ride, Button button, TextView status) {
+        button.setEnabled(true);
+        button.setText(R.string.join_request_cancel_action);
+        button.setOnClickListener(
+                view -> showCancelRequestDialog(ride, button, status)
+        );
         status.setVisibility(View.VISIBLE);
+    }
+
+    private void showAvailableState(Ride ride, Button button, TextView status) {
+        button.setEnabled(true);
+        button.setText(R.string.join_request_action);
+        button.setOnClickListener(
+                view -> showJoinRequestDialog(ride, button, status)
+        );
+        status.setVisibility(View.GONE);
     }
 
     private String addressOf(PlaceInfo place) {

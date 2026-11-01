@@ -7,7 +7,9 @@ import com.trojanrideshare.app.model.JoinRequest;
 import com.trojanrideshare.app.model.Ride;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class JoinRequestDataAccess implements JoinRequestRepository {
     private static final String RIDES_COLLECTION = "rides";
@@ -57,6 +59,56 @@ public class JoinRequestDataAccess implements JoinRequestRepository {
                 });
     }
 
+    @Override
+    public void cancel(String rideId, String requesterId, CancelCallback callback) {
+        DocumentReference requestReference = firestore
+                .collection(REQUESTS_COLLECTION)
+                .document(requestDocumentId(rideId, requesterId));
+
+        firestore.runTransaction(transaction -> {
+            DocumentSnapshot snapshot = transaction.get(requestReference);
+            JoinRequest request = snapshot.toObject(JoinRequest.class);
+            if (!isPendingRequest(snapshot, request, rideId, requesterId)) {
+                throw new SubmissionException(Failure.REQUEST_NOT_PENDING);
+            }
+
+            transaction.update(requestReference, "status", JoinRequest.CANCELLED);
+            return null;
+        }).addOnSuccessListener(unused -> callback.onSuccess())
+                .addOnFailureListener(exception -> {
+                    SubmissionException submissionException = findSubmissionException(exception);
+                    if (submissionException != null) {
+                        callback.onFailure(submissionException.failure);
+                    } else {
+                        callback.onError(exception);
+                    }
+                });
+    }
+
+    @Override
+    public void loadPendingRideIds(
+            String requesterId,
+            PendingRequestsCallback callback
+    ) {
+        firestore.collection(REQUESTS_COLLECTION)
+                .whereEqualTo("requesterId", requesterId)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    Set<String> rideIds = new HashSet<>();
+                    for (DocumentSnapshot document : snapshot.getDocuments()) {
+                        JoinRequest request = document.toObject(JoinRequest.class);
+                        if (request != null
+                                && JoinRequest.PENDING.equals(request.status)
+                                && request.rideId != null
+                                && !request.rideId.trim().isEmpty()) {
+                            rideIds.add(request.rideId);
+                        }
+                    }
+                    callback.onSuccess(rideIds);
+                })
+                .addOnFailureListener(callback::onError);
+    }
+
     private static boolean isAvailable(Ride ride, String requesterId) {
         if (ride == null || requesterId == null) {
             return false;
@@ -83,6 +135,19 @@ public class JoinRequestDataAccess implements JoinRequestRepository {
         return existing != null
                 && (JoinRequest.PENDING.equals(existing.status)
                 || JoinRequest.ACCEPTED.equals(existing.status));
+    }
+
+    private static boolean isPendingRequest(
+            DocumentSnapshot snapshot,
+            JoinRequest request,
+            String rideId,
+            String requesterId
+    ) {
+        return snapshot.exists()
+                && request != null
+                && rideId.equals(request.rideId)
+                && requesterId.equals(request.requesterId)
+                && JoinRequest.PENDING.equals(request.status);
     }
 
     private static String requestDocumentId(String rideId, String requesterId) {

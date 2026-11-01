@@ -13,6 +13,8 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 public class JoinRequestServiceTest {
     private static final String REQUESTER_ID = "requester";
@@ -108,6 +110,78 @@ public class JoinRequestServiceTest {
         assertEquals("Unable to send your request. Please try again.", failingResult.error);
     }
 
+    @Test
+    public void cancel_sendsTrimmedIdentifiersToRepository() {
+        FakeRepository repository = new FakeRepository();
+        CancelResult result = new CancelResult();
+
+        new JoinRequestService(repository).cancel(
+                "  ride-1  ",
+                "  requester  ",
+                result
+        );
+
+        assertEquals("ride-1", repository.cancelledRideId);
+        assertEquals(REQUESTER_ID, repository.cancelledRequesterId);
+        assertEquals(1, result.successCount);
+        assertNull(result.error);
+    }
+
+    @Test
+    public void cancel_rejectsMissingRideOrUserBeforeWriting() {
+        FakeRepository repository = new FakeRepository();
+        CancelResult missingRide = new CancelResult();
+        CancelResult missingUser = new CancelResult();
+        JoinRequestService service = new JoinRequestService(repository);
+
+        service.cancel("", REQUESTER_ID, missingRide);
+        service.cancel("ride-1", " ", missingUser);
+
+        assertNull(repository.cancelledRideId);
+        assertEquals("This ride is unavailable.", missingRide.error);
+        assertEquals("You must be signed in to cancel a request.", missingUser.error);
+    }
+
+    @Test
+    public void cancel_mapsNotPendingAndUnexpectedFailures() {
+        FakeRepository notPendingRepository = new FakeRepository();
+        notPendingRepository.cancelFailure =
+                JoinRequestRepository.Failure.REQUEST_NOT_PENDING;
+        CancelResult notPendingResult = new CancelResult();
+        new JoinRequestService(notPendingRepository).cancel(
+                "ride-1", REQUESTER_ID, notPendingResult
+        );
+
+        FakeRepository failingRepository = new FakeRepository();
+        failingRepository.cancelException = new IllegalStateException("network");
+        CancelResult failingResult = new CancelResult();
+        new JoinRequestService(failingRepository).cancel(
+                "ride-1", REQUESTER_ID, failingResult
+        );
+
+        assertEquals(1, notPendingResult.notPendingCount);
+        assertEquals("Unable to cancel your request. Please try again.", failingResult.error);
+    }
+
+    @Test
+    public void loadPendingRideIds_returnsRepositoryResultsAndMapsErrors() {
+        FakeRepository repository = new FakeRepository();
+        repository.pendingRideIds = new HashSet<>(Arrays.asList("ride-1", "ride-2"));
+        PendingResult result = new PendingResult();
+        new JoinRequestService(repository).loadPendingRideIds(REQUESTER_ID, result);
+
+        FakeRepository failingRepository = new FakeRepository();
+        failingRepository.pendingException = new IllegalStateException("network");
+        PendingResult failingResult = new PendingResult();
+        new JoinRequestService(failingRepository).loadPendingRideIds(
+                REQUESTER_ID,
+                failingResult
+        );
+
+        assertEquals(repository.pendingRideIds, result.rideIds);
+        assertEquals("Unable to load your pending requests.", failingResult.error);
+    }
+
     private static void assertValidationError(Ride ride, String requesterId) {
         FakeRepository repository = new FakeRepository();
         Result result = new Result();
@@ -140,6 +214,12 @@ public class JoinRequestServiceTest {
         private JoinRequest submittedRequest;
         private Failure failure;
         private Exception exception;
+        private String cancelledRideId;
+        private String cancelledRequesterId;
+        private Failure cancelFailure;
+        private Exception cancelException;
+        private Set<String> pendingRideIds = Collections.emptySet();
+        private Exception pendingException;
 
         @Override
         public void submit(JoinRequest request, Callback callback) {
@@ -150,6 +230,35 @@ public class JoinRequestServiceTest {
                 callback.onError(exception);
             } else {
                 callback.onSuccess(request);
+            }
+        }
+
+        @Override
+        public void cancel(
+                String rideId,
+                String requesterId,
+                CancelCallback callback
+        ) {
+            cancelledRideId = rideId;
+            cancelledRequesterId = requesterId;
+            if (cancelFailure != null) {
+                callback.onFailure(cancelFailure);
+            } else if (cancelException != null) {
+                callback.onError(cancelException);
+            } else {
+                callback.onSuccess();
+            }
+        }
+
+        @Override
+        public void loadPendingRideIds(
+                String requesterId,
+                PendingRequestsCallback callback
+        ) {
+            if (pendingException != null) {
+                callback.onError(pendingException);
+            } else {
+                callback.onSuccess(pendingRideIds);
             }
         }
     }
@@ -167,6 +276,43 @@ public class JoinRequestServiceTest {
         @Override
         public void onAlreadyRequested() {
             alreadyRequestedCount++;
+        }
+
+        @Override
+        public void onError(String message) {
+            error = message;
+        }
+    }
+
+    private static final class CancelResult implements JoinRequestService.CancelCallback {
+        private int successCount;
+        private int notPendingCount;
+        private String error;
+
+        @Override
+        public void onSuccess() {
+            successCount++;
+        }
+
+        @Override
+        public void onNotPending() {
+            notPendingCount++;
+        }
+
+        @Override
+        public void onError(String message) {
+            error = message;
+        }
+    }
+
+    private static final class PendingResult
+            implements JoinRequestService.PendingRequestsCallback {
+        private Set<String> rideIds;
+        private String error;
+
+        @Override
+        public void onSuccess(Set<String> result) {
+            rideIds = result;
         }
 
         @Override
