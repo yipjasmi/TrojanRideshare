@@ -1,8 +1,29 @@
 <resources>
     <string name="app_name">TrojanRideshare</string>
     <string name="search_title">Find a ride</string>
+    <string name="search_subtitle">Search open rides, then narrow the results with optional filters.</string>
+    <string name="search_route_section">Route</string>
+    <string name="search_filters_section">Filters and sorting</string>
     <string name="search_origin_hint">Origin keyword</string>
     <string name="search_destination_hint">Destination keyword</string>
+    <string name="search_select_origin">Choose preferred origin</string>
+    <string name="search_select_destination">Choose preferred destination</string>
+    <string name="search_date_label">Departure date range (optional)</string>
+    <string name="search_any_start_date">Any start date</string>
+    <string name="search_any_end_date">Any end date</string>
+    <string name="search_time_filter">Limit departure time</string>
+    <string name="search_start_time">Start: %1$s</string>
+    <string name="search_end_time">End: %1$s</string>
+    <string name="search_seats_label">Minimum available seats</string>
+    <string name="search_distance_filter">Limit distance from both preferred locations</string>
+    <string name="search_distance_hint">Maximum distance (miles)</string>
+    <string name="search_sort_label">Sort results by</string>
+    <string name="search_clear_filters">Clear filters</string>
+    <string name="search_invalid_distance">Enter a maximum distance greater than zero.</string>
+    <string name="search_invalid_date_range">The end date must be on or after the start date.</string>
+    <string name="search_locations_required">Choose both preferred locations to use distance filtering or proximity sorting.</string>
+    <string name="search_places_unavailable">Google Places is unavailable. Check the API key in local.properties.</string>
+    <string name="search_location_error">Could not select that location. Please try again.</string>
     <string name="search_action">Search rides</string>
     <string name="search_no_results">No matching rides found.</string>
     <string name="search_untitled_ride">Untitled ride</string>
@@ -11,6 +32,20 @@
     <string name="search_route_format">%1$s → %2$s</string>
     <string name="search_departure_format">Departure: %1$s</string>
     <string name="main_search_action">Find rides</string>
+    <string-array name="search_seat_options">
+        <item>Any number</item>
+        <item>1+ seat</item>
+        <item>2+ seats</item>
+        <item>3+ seats</item>
+        <item>4+ seats</item>
+        <item>5+ seats</item>
+    </string-array>
+    <string-array name="search_sort_options">
+        <item>Earliest departure</item>
+        <item>Latest departure</item>
+        <item>Closest route</item>
+        <item>Closest route + earliest</item>
+    </string-array>
     <plurals name="search_available_seats">
         <item quantity="one">%d seat available</item>
         <item quantity="other">%d seats available</item>

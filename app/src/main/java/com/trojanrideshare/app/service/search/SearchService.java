@@ -1,10 +1,14 @@
 package com.trojanrideshare.app.service.search;
 
 import com.trojanrideshare.app.data.ride.RideDataAccess;
+import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.SearchCriteria;
+import com.trojanrideshare.app.model.SortOption;
 
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -75,9 +79,152 @@ public class SearchService {
             )) {
                 continue;
             }
+            if (!matchesDateAndTime(ride, safeCriteria)) {
+                continue;
+            }
+            if (availableSeats(ride) < safeCriteria.minimumAvailableSeats) {
+                continue;
+            }
+            if (!matchesRouteDistance(ride, safeCriteria)) {
+                continue;
+            }
             results.add(ride);
         }
+
+        sortResults(results, safeCriteria);
         return results;
+    }
+
+    private static boolean matchesDateAndTime(Ride ride, SearchCriteria criteria) {
+        if (criteria.startDateMillis == null
+                && criteria.endDateMillis == null
+                && criteria.earliestDepartureMinute == null
+                && criteria.latestDepartureMinute == null) {
+            return true;
+        }
+        if (ride.departureTime == null) {
+            return false;
+        }
+
+        long departureMillis = ride.departureTime.toDate().getTime();
+        if (criteria.startDateMillis != null && departureMillis < criteria.startDateMillis) {
+            return false;
+        }
+        if (criteria.endDateMillis != null && departureMillis > criteria.endDateMillis) {
+            return false;
+        }
+
+        if (criteria.earliestDepartureMinute == null
+                && criteria.latestDepartureMinute == null) {
+            return true;
+        }
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(departureMillis);
+        int departureMinute = calendar.get(Calendar.HOUR_OF_DAY) * 60
+                + calendar.get(Calendar.MINUTE);
+        int earliest = criteria.earliestDepartureMinute == null
+                ? 0
+                : criteria.earliestDepartureMinute;
+        int latest = criteria.latestDepartureMinute == null
+                ? 24 * 60 - 1
+                : criteria.latestDepartureMinute;
+
+        if (earliest <= latest) {
+            return departureMinute >= earliest && departureMinute <= latest;
+        }
+        return departureMinute >= earliest || departureMinute <= latest;
+    }
+
+    private static boolean matchesRouteDistance(Ride ride, SearchCriteria criteria) {
+        if (criteria.maximumDistanceMiles <= 0) {
+            return true;
+        }
+        if (!criteria.hasRouteReference() || ride.origin == null || ride.destination == null) {
+            return false;
+        }
+        return distanceMiles(criteria.preferredOrigin, ride.origin)
+                <= criteria.maximumDistanceMiles
+                && distanceMiles(criteria.preferredDestination, ride.destination)
+                <= criteria.maximumDistanceMiles;
+    }
+
+    private static void sortResults(List<Ride> rides, SearchCriteria criteria) {
+        Comparator<Ride> departureComparator = Comparator.comparingLong(
+                SearchService::departureMillis
+        );
+        Comparator<Ride> proximityComparator = Comparator.comparingDouble(
+                ride -> routeDistanceMiles(ride, criteria)
+        );
+
+        SortOption option = criteria.sortOption;
+        if (option == SortOption.DEPARTURE_LATEST) {
+            rides.sort(departureComparator.reversed());
+        } else if (option == SortOption.ROUTE_PROXIMITY) {
+            rides.sort(proximityComparator.thenComparing(departureComparator));
+        } else if (option == SortOption.PROXIMITY_AND_TIME) {
+            long earliestDeparture = rides.stream()
+                    .mapToLong(SearchService::departureMillis)
+                    .min()
+                    .orElse(0);
+            rides.sort(Comparator.comparingDouble(
+                    ride -> combinedSortScore(ride, criteria, earliestDeparture)
+            ));
+        } else {
+            rides.sort(departureComparator);
+        }
+    }
+
+    private static double combinedSortScore(
+            Ride ride,
+            SearchCriteria criteria,
+            long earliestDeparture
+    ) {
+        double hoursAfterEarliest = Math.max(
+                0,
+                (departureMillis(ride) - earliestDeparture) / 3_600_000.0
+        );
+        return routeDistanceMiles(ride, criteria) + hoursAfterEarliest;
+    }
+
+    private static double routeDistanceMiles(Ride ride, SearchCriteria criteria) {
+        if (!criteria.hasRouteReference() || ride.origin == null || ride.destination == null) {
+            return Double.MAX_VALUE;
+        }
+        return distanceMiles(criteria.preferredOrigin, ride.origin)
+                + distanceMiles(criteria.preferredDestination, ride.destination);
+    }
+
+    private static long departureMillis(Ride ride) {
+        return ride.departureTime == null
+                ? Long.MAX_VALUE
+                : ride.departureTime.toDate().getTime();
+    }
+
+    private static int availableSeats(Ride ride) {
+        int participantCount = ride.participantIds == null ? 0 : ride.participantIds.size();
+        return Math.max(0, ride.maxRiders - participantCount);
+    }
+
+    static double distanceMiles(PlaceInfo first, PlaceInfo second) {
+        if (first == null || second == null) {
+            return Double.MAX_VALUE;
+        }
+        double earthRadiusMiles = 3958.8;
+        double latitudeDifference = Math.toRadians(second.lat - first.lat);
+        double longitudeDifference = Math.toRadians(second.lng - first.lng);
+        double firstLatitude = Math.toRadians(first.lat);
+        double secondLatitude = Math.toRadians(second.lat);
+        double haversine = Math.sin(latitudeDifference / 2)
+                * Math.sin(latitudeDifference / 2)
+                + Math.cos(firstLatitude)
+                * Math.cos(secondLatitude)
+                * Math.sin(longitudeDifference / 2)
+                * Math.sin(longitudeDifference / 2);
+        return earthRadiusMiles * 2 * Math.atan2(
+                Math.sqrt(haversine),
+                Math.sqrt(1 - haversine)
+        );
     }
 
     private static boolean isValidResult(Ride ride, String currentUserId) {
