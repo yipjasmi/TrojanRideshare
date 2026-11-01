@@ -18,6 +18,7 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.common.api.Status;
@@ -27,6 +28,8 @@ import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.AutocompleteActivity;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.BuildConfig;
 import com.trojanrideshare.app.R;
@@ -34,6 +37,7 @@ import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.SearchCriteria;
 import com.trojanrideshare.app.model.SortOption;
+import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.service.search.SearchService;
 
 import java.text.DateFormat;
@@ -41,8 +45,10 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class SearchActivity extends AppCompatActivity {
     public static final String EXTRA_CURRENT_USER_ID = "currentUserId";
@@ -62,6 +68,8 @@ public class SearchActivity extends AppCompatActivity {
     private TextView resultMessage;
     private LinearLayout resultsContainer;
     private SearchService searchService;
+    private JoinRequestService joinRequestService;
+    private final Set<String> requestedRideIds = new HashSet<>();
 
     private PlaceInfo preferredOrigin;
     private PlaceInfo preferredDestination;
@@ -86,6 +94,7 @@ public class SearchActivity extends AppCompatActivity {
 
         bindViews();
         searchService = new SearchService();
+        joinRequestService = new JoinRequestService();
         initializePlaces();
         updateTimeButtons();
 
@@ -401,6 +410,99 @@ public class SearchActivity extends AppCompatActivity {
         int availableSeats = Math.max(0, ride.maxRiders - participantCount);
         ((TextView) item.findViewById(R.id.rideSeats)).setText(getResources()
                 .getQuantityString(R.plurals.search_available_seats, availableSeats, availableSeats));
+
+        Button requestButton = item.findViewById(R.id.joinRequestButton);
+        TextView requestStatus = item.findViewById(R.id.joinRequestStatus);
+        if (requestedRideIds.contains(ride.id)) {
+            showPendingState(requestButton, requestStatus);
+        } else {
+            requestButton.setOnClickListener(
+                    view -> showJoinRequestDialog(ride, requestButton, requestStatus)
+            );
+        }
+    }
+
+    private void showJoinRequestDialog(
+            Ride ride,
+            Button requestButton,
+            TextView requestStatus
+    ) {
+        View dialogContent = LayoutInflater.from(this)
+                .inflate(R.layout.dialog_join_request, null, false);
+        TextInputEditText messageInput = dialogContent.findViewById(
+                R.id.joinRequestMessageInput
+        );
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.join_request_dialog_title)
+                .setMessage(getString(
+                        R.string.join_request_dialog_message,
+                        emptyFallback(ride.title, getString(R.string.search_untitled_ride))
+                ))
+                .setView(dialogContent)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.join_request_send, null)
+                .create();
+
+        dialog.setOnShowListener(unused -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> {
+                    String message = messageInput.getText() == null
+                            ? ""
+                            : messageInput.getText().toString();
+                    dialog.dismiss();
+                    submitJoinRequest(ride, message, requestButton, requestStatus);
+                }));
+        dialog.show();
+    }
+
+    private void submitJoinRequest(
+            Ride ride,
+            String message,
+            Button requestButton,
+            TextView requestStatus
+    ) {
+        requestButton.setEnabled(false);
+        requestButton.setText(R.string.join_request_sending);
+        joinRequestService.submit(
+                ride,
+                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID),
+                message,
+                new JoinRequestService.Callback() {
+                    @Override
+                    public void onSuccess(com.trojanrideshare.app.model.JoinRequest request) {
+                        requestedRideIds.add(ride.id);
+                        showPendingState(requestButton, requestStatus);
+                        Toast.makeText(
+                                SearchActivity.this,
+                                R.string.join_request_success,
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+
+                    @Override
+                    public void onAlreadyRequested() {
+                        requestedRideIds.add(ride.id);
+                        showPendingState(requestButton, requestStatus);
+                        Toast.makeText(
+                                SearchActivity.this,
+                                R.string.join_request_duplicate,
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        requestButton.setEnabled(true);
+                        requestButton.setText(R.string.join_request_action);
+                        Toast.makeText(SearchActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                }
+        );
+    }
+
+    private void showPendingState(Button button, TextView status) {
+        button.setEnabled(false);
+        button.setText(R.string.join_request_sent);
+        status.setVisibility(View.VISIBLE);
     }
 
     private String addressOf(PlaceInfo place) {

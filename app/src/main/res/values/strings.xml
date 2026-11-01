@@ -31,6 +31,17 @@
     <string name="search_unknown_time">Unknown time</string>
     <string name="search_route_format">%1$s → %2$s</string>
     <string name="search_departure_format">Departure: %1$s</string>
+    <string name="join_request_action">Request to join</string>
+    <string name="join_request_dialog_title">Request this ride</string>
+    <string name="join_request_dialog_message">Send a request for %1$s. The organizer must approve it before you join.</string>
+    <string name="join_request_message_hint">Message to organizer (optional)</string>
+    <string name="join_request_send">Send request</string>
+    <string name="join_request_sending">Sending…</string>
+    <string name="join_request_sent">Request sent</string>
+    <string name="join_request_pending">Pending organizer approval</string>
+    <string name="join_request_success">Your join request was sent.</string>
+    <string name="join_request_duplicate">You already requested this ride.</string>
+    <string name="cancel">Cancel</string>
     <string name="main_search_action">Find rides</string>
     <string-array name="search_seat_options">
         <item>Any number</item>
