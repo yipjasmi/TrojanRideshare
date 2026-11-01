@@ -1,10 +1,12 @@
 package com.trojanrideshare.app.payment;
 
 import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.Espresso.pressBack;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.action.ViewActions.closeSoftKeyboard;
 import static androidx.test.espresso.action.ViewActions.replaceText;
 import static androidx.test.espresso.action.ViewActions.scrollTo;
+import static androidx.test.espresso.assertion.PositionAssertions.isCompletelyBelow;
 import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.RootMatchers.isDialog;
@@ -34,6 +36,7 @@ import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.payment.PaymentRepository;
 import com.trojanrideshare.app.model.Ride;
@@ -437,6 +440,20 @@ public class PaymentFlowTest {
 
         try (ActivityScenario<PaymentsActivity> screen = ActivityScenario.launch(list)) {
             waitFor(withText(containsString("No ride costs yet")));
+        }
+    }
+
+    @Test
+    public void theHomeScreenOpensPaymentsBelowTheOtherButtons() throws Exception {
+        emulator.signIn(emulator.stranger);
+        Intent home = new Intent(context, MainActivity.class);
+
+        try (ActivityScenario<MainActivity> screen = ActivityScenario.launch(home)) {
+            onView(withId(R.id.paymentsButton))
+                    .check(isCompletelyBelow(withId(R.id.manageRequestsButton)));
+            onView(withId(R.id.paymentsButton)).perform(click());
+            waitFor(withText(containsString("No ride costs yet")));
+            pressBack();
         }
     }
 }

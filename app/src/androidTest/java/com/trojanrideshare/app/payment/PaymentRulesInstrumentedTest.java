@@ -10,11 +10,16 @@ import static org.junit.Assert.assertTrue;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
+import com.google.android.gms.tasks.TaskCompletionSource;
+import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
+import com.trojanrideshare.app.data.joinrequest.JoinRequestDataAccess;
+import com.trojanrideshare.app.data.joinrequest.JoinRequestRepository;
 import com.trojanrideshare.app.data.payment.PaymentRepository;
+import com.trojanrideshare.app.model.JoinRequest;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.service.payment.PaymentService;
 
@@ -22,6 +27,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -302,5 +308,77 @@ public class PaymentRulesInstrumentedTest {
         assertDenied(share(rideId, emulator.riderA).delete());
         emulator.signIn(emulator.riderA);
         assertDenied(share(rideId, emulator.riderA).delete());
+    }
+
+    // Who gets billed is whoever the join flow put in participantIds, so that flow has to get
+    // through these rules too.
+    @Test
+    public void aRiderWhoJoinsByRequestCanBeBilledAndPay() throws Exception {
+        String rideId = emulator.seedRide(Ride.STATUS_ON_TIME, new ArrayList<>());
+        JoinRequestDataAccess joinRequests = new JoinRequestDataAccess();
+
+        emulator.signIn(emulator.riderA);
+        submitJoinRequest(joinRequests, rideId, emulator.riderA);
+
+        emulator.signIn(emulator.organizer);
+        acceptJoinRequest(joinRequests, rideId, emulator.riderA);
+        await(db().collection("rides").document(rideId).update("status", Ride.STATUS_COMPLETED));
+        await(service.saveSplit(rideId, emulator.organizer,
+                Arrays.asList(emulator.organizer, emulator.riderA), new long[] {500, 500}, 1000));
+
+        emulator.signIn(emulator.riderA);
+        await(service.markPaid(rideId, emulator.riderA));
+        assertTrue(await(share(rideId, emulator.riderA).get()).getBoolean("paid"));
+    }
+
+    private void submitJoinRequest(JoinRequestDataAccess joinRequests, String rideId, String riderId)
+            throws Exception {
+        JoinRequest request = new JoinRequest();
+        request.rideId = rideId;
+        request.requesterId = riderId;
+        request.status = JoinRequest.PENDING;
+        request.createdAt = Timestamp.now();
+
+        TaskCompletionSource<Void> done = new TaskCompletionSource<>();
+        joinRequests.submit(request, new JoinRequestRepository.Callback() {
+            @Override
+            public void onSuccess(JoinRequest submitted) {
+                done.setResult(null);
+            }
+
+            @Override
+            public void onFailure(JoinRequestRepository.Failure failure) {
+                done.setException(new IllegalStateException(failure.name()));
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                done.setException(exception);
+            }
+        });
+        await(done.getTask());
+    }
+
+    private void acceptJoinRequest(JoinRequestDataAccess joinRequests, String rideId, String riderId)
+            throws Exception {
+        TaskCompletionSource<Void> done = new TaskCompletionSource<>();
+        joinRequests.accept(rideId, riderId, emulator.organizer,
+                new JoinRequestRepository.DecisionCallback() {
+                    @Override
+                    public void onSuccess() {
+                        done.setResult(null);
+                    }
+
+                    @Override
+                    public void onFailure(JoinRequestRepository.Failure failure) {
+                        done.setException(new IllegalStateException(failure.name()));
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        done.setException(exception);
+                    }
+                });
+        await(done.getTask());
     }
 }

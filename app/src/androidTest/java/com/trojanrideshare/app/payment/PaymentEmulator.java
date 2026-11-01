@@ -64,7 +64,9 @@ final class PaymentEmulator {
     }
 
     static PaymentEmulator start() throws Exception {
-        assumeTrue("Firebase emulators are not running", reachable(FIRESTORE_PORT));
+        // Only the first test can skip. Once connected, a network blip has to fail loudly, or a
+        // security test quietly drops out of a run that still reports success.
+        assumeTrue("Firebase emulators are not running", connected || reachable(FIRESTORE_PORT));
         if (!connected) {
             FirebaseAuth.getInstance().useEmulator(HOST, AUTH_PORT);
             FirebaseFirestore firestore = FirebaseFirestore.getInstance();
