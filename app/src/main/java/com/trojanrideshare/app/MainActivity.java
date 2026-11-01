@@ -19,6 +19,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.ui.search.SearchActivity;
+import com.trojanrideshare.app.ui.search.OrganizerRequestsActivity;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -64,6 +65,20 @@ public class MainActivity extends AppCompatActivity {
                 );
             }
             startActivity(searchIntent);
+        });
+        findViewById(R.id.manageRequestsButton).setOnClickListener(v -> {
+            Intent requestsIntent = new Intent(
+                    MainActivity.this,
+                    OrganizerRequestsActivity.class
+            );
+            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser != null) {
+                requestsIntent.putExtra(
+                        OrganizerRequestsActivity.EXTRA_ORGANIZER_ID,
+                        currentUser.getUid()
+                );
+            }
+            startActivity(requestsIntent);
         });
     }
 }

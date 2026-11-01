@@ -4,11 +4,15 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.model.JoinRequest;
+import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.model.Ride;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class JoinRequestDataAccess implements JoinRequestRepository {
@@ -109,6 +113,170 @@ public class JoinRequestDataAccess implements JoinRequestRepository {
                 .addOnFailureListener(callback::onError);
     }
 
+    @Override
+    public void loadOrganizerRequests(
+            String organizerId,
+            OrganizerRequestsCallback callback
+    ) {
+        firestore.collection(RIDES_COLLECTION)
+                .whereEqualTo("organizerId", organizerId)
+                .get()
+                .addOnSuccessListener(rideSnapshot -> {
+                    Map<String, Ride> ridesById = new HashMap<>();
+                    for (DocumentSnapshot document : rideSnapshot.getDocuments()) {
+                        Ride ride = document.toObject(Ride.class);
+                        if (ride != null && ride.id != null) {
+                            ridesById.put(ride.id, ride);
+                        }
+                    }
+                    if (ridesById.isEmpty()) {
+                        callback.onSuccess(Collections.emptyList());
+                        return;
+                    }
+                    loadPendingRequestsForRides(ridesById, callback);
+                })
+                .addOnFailureListener(callback::onError);
+    }
+
+    private void loadPendingRequestsForRides(
+            Map<String, Ride> ridesById,
+            OrganizerRequestsCallback callback
+    ) {
+        firestore.collection(REQUESTS_COLLECTION)
+                .whereEqualTo("status", JoinRequest.PENDING)
+                .get()
+                .addOnSuccessListener(requestSnapshot -> {
+                    List<OrganizerJoinRequest> results = new ArrayList<>();
+                    for (DocumentSnapshot document : requestSnapshot.getDocuments()) {
+                        JoinRequest request = document.toObject(JoinRequest.class);
+                        Ride ride = request == null ? null : ridesById.get(request.rideId);
+                        if (request != null && ride != null) {
+                            results.add(new OrganizerJoinRequest(request, ride));
+                        }
+                    }
+                    results.sort((left, right) -> {
+                        if (left.request.createdAt == null
+                                && right.request.createdAt == null) return 0;
+                        if (left.request.createdAt == null) return 1;
+                        if (right.request.createdAt == null) return -1;
+                        return left.request.createdAt.compareTo(right.request.createdAt);
+                    });
+                    callback.onSuccess(results);
+                })
+                .addOnFailureListener(callback::onError);
+    }
+
+    @Override
+    public void accept(
+            String rideId,
+            String requesterId,
+            String organizerId,
+            DecisionCallback callback
+    ) {
+        DocumentReference rideReference = firestore
+                .collection(RIDES_COLLECTION)
+                .document(rideId);
+        DocumentReference requestReference = firestore
+                .collection(REQUESTS_COLLECTION)
+                .document(requestDocumentId(rideId, requesterId));
+
+        firestore.runTransaction(transaction -> {
+            DocumentSnapshot rideSnapshot = transaction.get(rideReference);
+            DocumentSnapshot requestSnapshot = transaction.get(requestReference);
+            Ride ride = rideSnapshot.toObject(Ride.class);
+            JoinRequest request = requestSnapshot.toObject(JoinRequest.class);
+
+            validateOrganizerDecision(
+                    ride,
+                    requestSnapshot,
+                    request,
+                    rideId,
+                    requesterId,
+                    organizerId
+            );
+            if (!Ride.STATUS_ON_TIME.equals(ride.status)
+                    && !Ride.STATUS_DELAYED.equals(ride.status)) {
+                throw new SubmissionException(Failure.RIDE_UNAVAILABLE);
+            }
+
+            List<String> participants = ride.participantIds == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(ride.participantIds);
+            if (participants.contains(requesterId)) {
+                throw new SubmissionException(Failure.REQUEST_NOT_PENDING);
+            }
+            if (participants.size() >= ride.maxRiders) {
+                throw new SubmissionException(Failure.RIDE_FULL);
+            }
+
+            participants.add(requesterId);
+            transaction.update(rideReference, "participantIds", participants);
+            transaction.update(requestReference, "status", JoinRequest.ACCEPTED);
+            return null;
+        }).addOnSuccessListener(unused -> callback.onSuccess())
+                .addOnFailureListener(exception -> handleDecisionFailure(exception, callback));
+    }
+
+    @Override
+    public void reject(
+            String rideId,
+            String requesterId,
+            String organizerId,
+            DecisionCallback callback
+    ) {
+        DocumentReference rideReference = firestore
+                .collection(RIDES_COLLECTION)
+                .document(rideId);
+        DocumentReference requestReference = firestore
+                .collection(REQUESTS_COLLECTION)
+                .document(requestDocumentId(rideId, requesterId));
+
+        firestore.runTransaction(transaction -> {
+            Ride ride = transaction.get(rideReference).toObject(Ride.class);
+            DocumentSnapshot requestSnapshot = transaction.get(requestReference);
+            JoinRequest request = requestSnapshot.toObject(JoinRequest.class);
+            validateOrganizerDecision(
+                    ride,
+                    requestSnapshot,
+                    request,
+                    rideId,
+                    requesterId,
+                    organizerId
+            );
+            transaction.update(requestReference, "status", JoinRequest.REJECTED);
+            return null;
+        }).addOnSuccessListener(unused -> callback.onSuccess())
+                .addOnFailureListener(exception -> handleDecisionFailure(exception, callback));
+    }
+
+    private static void validateOrganizerDecision(
+            Ride ride,
+            DocumentSnapshot requestSnapshot,
+            JoinRequest request,
+            String rideId,
+            String requesterId,
+            String organizerId
+    ) {
+        if (ride == null || !organizerId.equals(ride.organizerId)) {
+            throw new SubmissionException(Failure.NOT_AUTHORIZED);
+        }
+        if (!isPendingRequest(requestSnapshot, request, rideId, requesterId)) {
+            throw new SubmissionException(Failure.REQUEST_NOT_PENDING);
+        }
+    }
+
+    private static void handleDecisionFailure(
+            Exception exception,
+            DecisionCallback callback
+    ) {
+        SubmissionException submissionException = findSubmissionException(exception);
+        if (submissionException != null) {
+            callback.onFailure(submissionException.failure);
+        } else {
+            callback.onError(exception);
+        }
+    }
+
     private static boolean isAvailable(Ride ride, String requesterId) {
         if (ride == null || requesterId == null) {
             return false;
@@ -124,7 +292,7 @@ public class JoinRequestDataAccess implements JoinRequestRepository {
                 ? Collections.emptyList()
                 : ride.participantIds;
         return !participants.contains(requesterId)
-                && ride.maxRiders > participants.size();
+                && ride.getAvailableSeats() > 0;
     }
 
     private static boolean hasActiveRequest(DocumentSnapshot snapshot) {

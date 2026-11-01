@@ -51,6 +51,21 @@
     <string name="join_request_status_error">Unable to load your pending request status.</string>
     <string name="cancel">Cancel</string>
     <string name="main_search_action">Find rides</string>
+    <string name="main_manage_requests_action">Manage join requests</string>
+    <string name="back">Back</string>
+    <string name="organizer_requests_title">Join requests</string>
+    <string name="organizer_requests_subtitle">Accepting a rider fills one available seat. Rejecting a request does not change the seat count.</string>
+    <string name="organizer_requests_empty">You have no pending join requests.</string>
+    <string name="organizer_request_rider">Rider: %1$s</string>
+    <string name="organizer_request_message">Message: %1$s</string>
+    <string name="organizer_accept_action">Accept</string>
+    <string name="organizer_reject_action">Reject</string>
+    <string name="organizer_accept_title">Accept this rider?</string>
+    <string name="organizer_accept_message">Accept %1$s and use one available seat?</string>
+    <string name="organizer_reject_title">Reject this request?</string>
+    <string name="organizer_reject_message">Reject the pending request from %1$s?</string>
+    <string name="organizer_accept_success">Request accepted. The available seat count was updated.</string>
+    <string name="organizer_reject_success">Request rejected. The seat count was not changed.</string>
     <string-array name="search_seat_options">
         <item>Any number</item>
         <item>1+ seat</item>

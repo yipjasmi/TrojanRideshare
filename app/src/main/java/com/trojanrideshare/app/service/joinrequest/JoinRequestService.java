@@ -4,6 +4,7 @@ import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.data.joinrequest.JoinRequestDataAccess;
 import com.trojanrideshare.app.data.joinrequest.JoinRequestRepository;
 import com.trojanrideshare.app.model.JoinRequest;
+import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.model.Ride;
 
 import java.util.Collections;
@@ -25,6 +26,17 @@ public class JoinRequestService {
 
     public interface PendingRequestsCallback {
         void onSuccess(Set<String> rideIds);
+        void onError(String message);
+    }
+
+    public interface OrganizerRequestsCallback {
+        void onSuccess(List<OrganizerJoinRequest> requests);
+        void onError(String message);
+    }
+
+    public interface DecisionCallback {
+        void onSuccess();
+        void onUnavailable(String message);
         void onError(String message);
     }
 
@@ -140,6 +152,112 @@ public class JoinRequestService {
         );
     }
 
+    public void loadOrganizerRequests(
+            String organizerId,
+            OrganizerRequestsCallback callback
+    ) {
+        if (organizerId == null || organizerId.trim().isEmpty()) {
+            callback.onError("You must be signed in to manage requests.");
+            return;
+        }
+        repository.loadOrganizerRequests(
+                organizerId.trim(),
+                new JoinRequestRepository.OrganizerRequestsCallback() {
+                    @Override
+                    public void onSuccess(List<OrganizerJoinRequest> requests) {
+                        callback.onSuccess(requests);
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        callback.onError("Unable to load join requests.");
+                    }
+                }
+        );
+    }
+
+    public void accept(
+            String rideId,
+            String requesterId,
+            String organizerId,
+            DecisionCallback callback
+    ) {
+        decide(true, rideId, requesterId, organizerId, callback);
+    }
+
+    public void reject(
+            String rideId,
+            String requesterId,
+            String organizerId,
+            DecisionCallback callback
+    ) {
+        decide(false, rideId, requesterId, organizerId, callback);
+    }
+
+    private void decide(
+            boolean accepting,
+            String rideId,
+            String requesterId,
+            String organizerId,
+            DecisionCallback callback
+    ) {
+        if (rideId == null || rideId.trim().isEmpty()
+                || requesterId == null || requesterId.trim().isEmpty()) {
+            callback.onError("This join request is unavailable.");
+            return;
+        }
+        if (organizerId == null || organizerId.trim().isEmpty()) {
+            callback.onError("You must be signed in to manage requests.");
+            return;
+        }
+
+        JoinRequestRepository.DecisionCallback repositoryCallback =
+                new JoinRequestRepository.DecisionCallback() {
+                    @Override
+                    public void onSuccess() {
+                        callback.onSuccess();
+                    }
+
+                    @Override
+                    public void onFailure(JoinRequestRepository.Failure failure) {
+                        callback.onUnavailable(decisionFailureMessage(failure));
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        callback.onError("Unable to update this request. Please try again.");
+                    }
+                };
+        if (accepting) {
+            repository.accept(
+                    rideId.trim(),
+                    requesterId.trim(),
+                    organizerId.trim(),
+                    repositoryCallback
+            );
+        } else {
+            repository.reject(
+                    rideId.trim(),
+                    requesterId.trim(),
+                    organizerId.trim(),
+                    repositoryCallback
+            );
+        }
+    }
+
+    private static String decisionFailureMessage(JoinRequestRepository.Failure failure) {
+        if (failure == JoinRequestRepository.Failure.RIDE_FULL) {
+            return "This ride is already full.";
+        }
+        if (failure == JoinRequestRepository.Failure.NOT_AUTHORIZED) {
+            return "Only the ride organizer can manage this request.";
+        }
+        if (failure == JoinRequestRepository.Failure.RIDE_UNAVAILABLE) {
+            return "This ride is no longer available.";
+        }
+        return "This request is no longer pending.";
+    }
+
     static String validationError(Ride ride, String requesterId, String message) {
         if (requesterId == null || requesterId.trim().isEmpty()) {
             return "You must be signed in to request a ride.";
@@ -160,7 +278,7 @@ public class JoinRequestService {
         if (participants.contains(requesterId)) {
             return "You have already joined this ride.";
         }
-        if (ride.maxRiders <= participants.size()) {
+        if (ride.getAvailableSeats() == 0) {
             return "This ride has no available seats.";
         }
         if (clean(message).length() > MAXIMUM_MESSAGE_LENGTH) {

@@ -202,8 +202,7 @@ public class SearchService {
     }
 
     private static int availableSeats(Ride ride) {
-        int participantCount = ride.participantIds == null ? 0 : ride.participantIds.size();
-        return Math.max(0, ride.maxRiders - participantCount);
+        return ride.getAvailableSeats();
     }
 
     static double distanceMiles(PlaceInfo first, PlaceInfo second) {
@@ -245,7 +244,7 @@ public class SearchService {
         if (participants.contains(currentUserId)) {
             return false;
         }
-        return ride.maxRiders > participants.size();
+        return ride.getAvailableSeats() > 0;
     }
 
     private static String addressOf(com.trojanrideshare.app.model.PlaceInfo place) {

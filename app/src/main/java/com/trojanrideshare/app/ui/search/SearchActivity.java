@@ -410,8 +410,7 @@ public class SearchActivity extends AppCompatActivity {
                 formatDeparture(ride.departureTime)
         ));
 
-        int participantCount = ride.participantIds == null ? 0 : ride.participantIds.size();
-        int availableSeats = Math.max(0, ride.maxRiders - participantCount);
+        int availableSeats = ride.getAvailableSeats();
         ((TextView) item.findViewById(R.id.rideSeats)).setText(getResources()
                 .getQuantityString(R.plurals.search_available_seats, availableSeats, availableSeats));
 

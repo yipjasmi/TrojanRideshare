@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNull;
 
 import com.trojanrideshare.app.data.joinrequest.JoinRequestRepository;
 import com.trojanrideshare.app.model.JoinRequest;
+import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.model.Ride;
 
 import org.junit.Test;
@@ -15,6 +16,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
 
 public class JoinRequestServiceTest {
     private static final String REQUESTER_ID = "requester";
@@ -182,6 +184,45 @@ public class JoinRequestServiceTest {
         assertEquals("Unable to load your pending requests.", failingResult.error);
     }
 
+    @Test
+    public void accept_sendsIdentifiersAndMapsFullRide() {
+        FakeRepository repository = new FakeRepository();
+        DecisionResult success = new DecisionResult();
+        new JoinRequestService(repository).accept(
+                " ride-1 ", " requester ", " organizer ", success
+        );
+
+        assertEquals("ride-1", repository.acceptedRideId);
+        assertEquals(REQUESTER_ID, repository.acceptedRequesterId);
+        assertEquals("organizer", repository.decisionOrganizerId);
+        assertEquals(1, success.successCount);
+
+        repository.decisionFailure = JoinRequestRepository.Failure.RIDE_FULL;
+        DecisionResult full = new DecisionResult();
+        new JoinRequestService(repository).accept(
+                "ride-1", REQUESTER_ID, "organizer", full
+        );
+        assertEquals("This ride is already full.", full.unavailableMessage);
+    }
+
+    @Test
+    public void reject_doesNotUseAcceptPathAndMapsAuthorizationFailure() {
+        FakeRepository repository = new FakeRepository();
+        repository.decisionFailure = JoinRequestRepository.Failure.NOT_AUTHORIZED;
+        DecisionResult result = new DecisionResult();
+
+        new JoinRequestService(repository).reject(
+                "ride-1", REQUESTER_ID, "organizer", result
+        );
+
+        assertEquals("ride-1", repository.rejectedRideId);
+        assertNull(repository.acceptedRideId);
+        assertEquals(
+                "Only the ride organizer can manage this request.",
+                result.unavailableMessage
+        );
+    }
+
     private static void assertValidationError(Ride ride, String requesterId) {
         FakeRepository repository = new FakeRepository();
         Result result = new Result();
@@ -220,6 +261,11 @@ public class JoinRequestServiceTest {
         private Exception cancelException;
         private Set<String> pendingRideIds = Collections.emptySet();
         private Exception pendingException;
+        private String acceptedRideId;
+        private String acceptedRequesterId;
+        private String rejectedRideId;
+        private String decisionOrganizerId;
+        private Failure decisionFailure;
 
         @Override
         public void submit(JoinRequest request, Callback callback) {
@@ -259,6 +305,47 @@ public class JoinRequestServiceTest {
                 callback.onError(pendingException);
             } else {
                 callback.onSuccess(pendingRideIds);
+            }
+        }
+
+        @Override
+        public void loadOrganizerRequests(
+                String organizerId,
+                OrganizerRequestsCallback callback
+        ) {
+            callback.onSuccess(Collections.<OrganizerJoinRequest>emptyList());
+        }
+
+        @Override
+        public void accept(
+                String rideId,
+                String requesterId,
+                String organizerId,
+                DecisionCallback callback
+        ) {
+            acceptedRideId = rideId;
+            acceptedRequesterId = requesterId;
+            decisionOrganizerId = organizerId;
+            completeDecision(callback);
+        }
+
+        @Override
+        public void reject(
+                String rideId,
+                String requesterId,
+                String organizerId,
+                DecisionCallback callback
+        ) {
+            rejectedRideId = rideId;
+            decisionOrganizerId = organizerId;
+            completeDecision(callback);
+        }
+
+        private void completeDecision(DecisionCallback callback) {
+            if (decisionFailure == null) {
+                callback.onSuccess();
+            } else {
+                callback.onFailure(decisionFailure);
             }
         }
     }
@@ -313,6 +400,28 @@ public class JoinRequestServiceTest {
         @Override
         public void onSuccess(Set<String> result) {
             rideIds = result;
+        }
+
+        @Override
+        public void onError(String message) {
+            error = message;
+        }
+    }
+
+    private static final class DecisionResult
+            implements JoinRequestService.DecisionCallback {
+        private int successCount;
+        private String unavailableMessage;
+        private String error;
+
+        @Override
+        public void onSuccess() {
+            successCount++;
+        }
+
+        @Override
+        public void onUnavailable(String message) {
+            unavailableMessage = message;
         }
 
         @Override
