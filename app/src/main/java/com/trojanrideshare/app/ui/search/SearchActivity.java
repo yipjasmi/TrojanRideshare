@@ -41,6 +41,7 @@ import com.trojanrideshare.app.model.SearchCriteria;
 import com.trojanrideshare.app.model.SortOption;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.service.search.SearchService;
+import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
 
 import java.text.DateFormat;
@@ -412,6 +413,7 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     private void bindRide(View item, Ride ride) {
+        item.setOnClickListener(view -> openRideDetail(ride));
         ((TextView) item.findViewById(R.id.rideTitle)).setText(
                 emptyFallback(ride.title, getString(R.string.search_untitled_ride))
         );
@@ -436,6 +438,15 @@ public class SearchActivity extends AppCompatActivity {
         } else {
             showAvailableState(ride, requestButton, requestStatus);
         }
+    }
+
+    private void openRideDetail(Ride ride) {
+        Intent intent = new Intent(this, RideDetailActivity.class);
+        intent.putExtra(RideDetailActivity.EXTRA_RIDE_ID, ride.id);
+        intent.putExtra(
+                RideDetailActivity.EXTRA_CURRENT_USER_ID,
+                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID));
+        startActivity(intent);
     }
 
     private void showJoinRequestDialog(

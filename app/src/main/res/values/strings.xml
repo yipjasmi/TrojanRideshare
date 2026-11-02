@@ -87,6 +87,13 @@
 
     <!-- Ride creation and management -->
     <string name="main_create_action">Create a ride</string>
+    <string name="main_notifications_action">Notifications</string>
+
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_empty">No notifications yet.</string>
+    <string name="notifications_load_error">Could not load notifications. Please try again.</string>
+    <string name="notification_default_message">You have a new notification.</string>
+    <string name="notification_unknown_time">Just now</string>
 
     <string name="create_ride_title">Create a ride</string>
     <string name="create_ride_title_hint">Title</string>

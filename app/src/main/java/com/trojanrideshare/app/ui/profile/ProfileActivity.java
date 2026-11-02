@@ -16,12 +16,14 @@ import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
 import androidx.credentials.exceptions.ClearCredentialException;
 
+import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.User;
+import com.trojanrideshare.app.service.ride.RideScheduleService;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
 
@@ -96,27 +98,48 @@ public class ProfileActivity extends AppCompatActivity {
                 .whereArrayContains("participantIds", userId)
                 .get()
                 .addOnSuccessListener(snapshot -> {
-                    List<String> upcomingTitles = new ArrayList<>();
-                    List<String> completedTitles = new ArrayList<>();
-
+                    List<Ride> rides = new ArrayList<>();
                     snapshot.getDocuments().forEach(doc -> {
                         Ride ride = doc.toObject(Ride.class);
                         if (ride != null) {
-                            String titleInfo = ride.title + " (" + ride.status + ")";
-                            if (Ride.STATUS_COMPLETED.equals(ride.status)) {
-                                completedTitles.add(titleInfo);
-                            } else {
-                                upcomingTitles.add(titleInfo);
-                            }
+                            rides.add(ride);
                         }
                     });
 
-                    upcomingRidesListView.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, upcomingTitles));
-                    completedRidesListView.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, completedTitles));
+                    Timestamp now = Timestamp.now();
+                    // After a ride's departure passes, move it from upcoming to completed
+                    // (cancelled rides are excluded from both lists).
+                    flipDepartedRides(rides, now);
+                    RideScheduleService.Schedule schedule =
+                            RideScheduleService.partition(rides, now);
+
+                    upcomingRidesListView.setAdapter(new ArrayAdapter<>(
+                            this, android.R.layout.simple_list_item_1, titlesOf(schedule.upcoming)));
+                    completedRidesListView.setAdapter(new ArrayAdapter<>(
+                            this, android.R.layout.simple_list_item_1, titlesOf(schedule.completed)));
                 })
                 .addOnFailureListener(e -> {
                     Toast.makeText(this, "Failed to load rides", Toast.LENGTH_SHORT).show();
                 });
+    }
+
+    private static List<String> titlesOf(List<Ride> rides) {
+        List<String> titles = new ArrayList<>();
+        for (Ride ride : rides) {
+            titles.add(ride.title == null || ride.title.trim().isEmpty()
+                    ? "Untitled ride" : ride.title);
+        }
+        return titles;
+    }
+
+    /** Best-effort: persist the completed status for rides whose departure has passed. */
+    private void flipDepartedRides(List<Ride> rides, Timestamp now) {
+        for (Ride ride : rides) {
+            if (ride.id != null && RideScheduleService.needsCompletion(ride, now)) {
+                db.collection("rides").document(ride.id)
+                        .update("status", Ride.STATUS_COMPLETED);
+            }
+        }
     }
 
     private void signOut() {

@@ -1,11 +1,14 @@
 package com.trojanrideshare.app.service.ride;
 
 import com.google.firebase.Timestamp;
+import com.trojanrideshare.app.data.notification.NotificationDataAccess;
 import com.trojanrideshare.app.data.ride.RideDataAccess;
+import com.trojanrideshare.app.model.Notification;
 import com.trojanrideshare.app.model.Ride;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,13 +37,15 @@ public class EditRideService {
     private static final String GENERIC_ERROR = "Unable to save your changes. Please try again.";
 
     private final RideDataAccess rideDataAccess;
+    private final NotificationDataAccess notificationDataAccess;
 
     public EditRideService() {
-        this(new RideDataAccess());
+        this(new RideDataAccess(), new NotificationDataAccess());
     }
 
-    EditRideService(RideDataAccess rideDataAccess) {
+    EditRideService(RideDataAccess rideDataAccess, NotificationDataAccess notificationDataAccess) {
         this.rideDataAccess = rideDataAccess;
+        this.notificationDataAccess = notificationDataAccess;
     }
 
     public void updateRide(
@@ -73,6 +78,8 @@ public class EditRideService {
         rideDataAccess.updateRide(existing.id, updates, new RideDataAccess.WriteCallback() {
             @Override
             public void onSuccess() {
+                notifyRiders(existing, Notification.TYPE_RIDE_UPDATED,
+                        "\"" + input.title.trim() + "\" was updated.");
                 callback.onSuccess();
             }
 
@@ -94,6 +101,8 @@ public class EditRideService {
                 existing.id, Ride.STATUS_CANCELLED, new RideDataAccess.WriteCallback() {
                     @Override
                     public void onSuccess() {
+                        notifyRiders(existing, Notification.TYPE_RIDE_CANCELLED,
+                                "\"" + existing.title + "\" was cancelled.");
                         callback.onSuccess();
                     }
 
@@ -102,6 +111,33 @@ public class EditRideService {
                         callback.onError(GENERIC_ERROR);
                     }
                 });
+    }
+
+    /** Best-effort in-app notification to every rider except the organizer. */
+    private void notifyRiders(Ride ride, String type, String message) {
+        List<String> participants = ride.participantIds == null
+                ? Collections.emptyList()
+                : ride.participantIds;
+        for (String participantId : participants) {
+            if (participantId == null || participantId.equals(ride.organizerId)) {
+                continue;
+            }
+            Notification notification = new Notification();
+            notification.userId = participantId;
+            notification.type = type;
+            notification.rideId = ride.id;
+            notification.message = message;
+            notification.read = false;
+            notification.createdAt = Timestamp.now();
+            notificationDataAccess.create(
+                    notification, new NotificationDataAccess.WriteCallback() {
+                        @Override
+                        public void onSuccess() {}
+
+                        @Override
+                        public void onError(Exception exception) {}
+                    });
+        }
     }
 
     /** Returns a reason the user may not edit the ride, or {@code null} if they may. */

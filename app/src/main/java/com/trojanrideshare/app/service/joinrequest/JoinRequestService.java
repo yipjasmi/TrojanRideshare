@@ -3,7 +3,9 @@ package com.trojanrideshare.app.service.joinrequest;
 import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.data.joinrequest.JoinRequestDataAccess;
 import com.trojanrideshare.app.data.joinrequest.JoinRequestRepository;
+import com.trojanrideshare.app.data.notification.NotificationDataAccess;
 import com.trojanrideshare.app.model.JoinRequest;
+import com.trojanrideshare.app.model.Notification;
 import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.model.Ride;
 
@@ -42,13 +44,23 @@ public class JoinRequestService {
 
     private static final int MAXIMUM_MESSAGE_LENGTH = 250;
     private final JoinRequestRepository repository;
+    // Null in the unit-test constructor so tests do not touch Firebase; notifications are
+    // then skipped (they are best-effort anyway).
+    private final NotificationDataAccess notificationDataAccess;
 
     public JoinRequestService() {
-        this(new JoinRequestDataAccess());
+        this(new JoinRequestDataAccess(), new NotificationDataAccess());
     }
 
     JoinRequestService(JoinRequestRepository repository) {
+        this(repository, null);
+    }
+
+    JoinRequestService(
+            JoinRequestRepository repository,
+            NotificationDataAccess notificationDataAccess) {
         this.repository = repository;
+        this.notificationDataAccess = notificationDataAccess;
     }
 
     public void submit(
@@ -73,6 +85,8 @@ public class JoinRequestService {
         repository.submit(request, new JoinRequestRepository.Callback() {
             @Override
             public void onSuccess(JoinRequest submittedRequest) {
+                sendNotification(ride.organizerId, ride.id, Notification.TYPE_JOIN_REQUEST,
+                        "You have a new join request for \"" + ride.title + "\".");
                 callback.onSuccess(submittedRequest);
             }
 
@@ -215,6 +229,13 @@ public class JoinRequestService {
                 new JoinRequestRepository.DecisionCallback() {
                     @Override
                     public void onSuccess() {
+                        sendNotification(requesterId.trim(), rideId.trim(),
+                                accepting
+                                        ? Notification.TYPE_REQUEST_ACCEPTED
+                                        : Notification.TYPE_REQUEST_REJECTED,
+                                accepting
+                                        ? "Your join request was accepted."
+                                        : "Your join request was declined.");
                         callback.onSuccess();
                     }
 
@@ -289,5 +310,26 @@ public class JoinRequestService {
 
     private static String clean(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    /** Best-effort in-app notification. No-op when notifications are unavailable. */
+    private void sendNotification(String userId, String rideId, String type, String message) {
+        if (notificationDataAccess == null || userId == null || userId.trim().isEmpty()) {
+            return;
+        }
+        Notification notification = new Notification();
+        notification.userId = userId;
+        notification.type = type;
+        notification.rideId = rideId;
+        notification.message = message;
+        notification.read = false;
+        notification.createdAt = Timestamp.now();
+        notificationDataAccess.create(notification, new NotificationDataAccess.WriteCallback() {
+            @Override
+            public void onSuccess() {}
+
+            @Override
+            public void onError(Exception exception) {}
+        });
     }
 }

@@ -14,6 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.Timestamp;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.ride.RideDataAccess;
 import com.trojanrideshare.app.data.user.UserDataAccess;
@@ -60,6 +62,14 @@ public class RideDetailActivity extends AppCompatActivity {
         userDataAccess = new UserDataAccess();
         joinRequestService = new JoinRequestService();
         currentUserId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
+            // Fall back to the signed-in user when the caller didn't pass an id
+            // (e.g. opened from search via bottom navigation).
+            FirebaseUser signedIn = FirebaseAuth.getInstance().getCurrentUser();
+            if (signedIn != null) {
+                currentUserId = signedIn.getUid();
+            }
+        }
 
         loadingIndicator = findViewById(R.id.detailLoadingIndicator);
         content = findViewById(R.id.detailContent);
