@@ -17,6 +17,8 @@ import androidx.credentials.CredentialManagerCallback;
 import androidx.credentials.exceptions.ClearCredentialException;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.ui.search.SearchActivity;
 import com.trojanrideshare.app.ui.search.OrganizerRequestsActivity;
@@ -83,5 +85,29 @@ public class MainActivity extends AppCompatActivity {
         });
 
         BottomNavHelper.setupBottomNav(this, R.id.nav_home);
+
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser != null) {
+            FirebaseFirestore.getInstance().collection("users").document(currentUser.getUid())
+                    .get()
+                    .addOnSuccessListener(documentSnapshot -> {
+                        User user = documentSnapshot.toObject(User.class);
+                        String name = (user != null && user.fullName != null) ? user.fullName : currentUser.getDisplayName();
+                        if (name == null || name.isEmpty()) {
+                            name = "Trojan";
+                        }
+                        android.widget.TextView helloText = findViewById(R.id.helloText);
+                        if (helloText != null) {
+                            helloText.setText("Hello, " + name + "!");
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        android.widget.TextView helloText = findViewById(R.id.helloText);
+                        if (helloText != null) {
+                            String name = currentUser.getDisplayName() != null ? currentUser.getDisplayName() : "Trojan";
+                            helloText.setText("Hello, " + name + "!");
+                        }
+                    });
+        }
     }
 }
