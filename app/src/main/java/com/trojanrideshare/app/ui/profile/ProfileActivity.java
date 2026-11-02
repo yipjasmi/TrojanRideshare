@@ -75,8 +75,8 @@ public class ProfileActivity extends AppCompatActivity {
                     if (user != null) {
                         nameTextView.setText("Name: " + (user.fullName != null ? user.fullName : "N/A"));
                         emailTextView.setText("Email: " + (user.email != null ? user.email : "N/A"));
-                        uscIdTextView.setText("USC ID: " + (user.uscId != null ? user.uscId : "N/A") + " (Locked)");
-                        gradYearTextView.setText("Graduation Year: " + user.gradYear + " (Locked)");
+                        uscIdTextView.setText("USC ID: " + (user.uscId != null ? user.uscId : "N/A"));
+                        gradYearTextView.setText("Graduation Year: " + user.gradYear);
                     } else {
                         nameTextView.setText("Name: " + currentUser.getDisplayName());
                         emailTextView.setText("Email: " + currentUser.getEmail());
