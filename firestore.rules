@@ -5,8 +5,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
+    // The app's @usc.edu check only runs on the phone, so a modified client skips it. Without
+    // email_verified, anyone could sign up with a password using a usc.edu address.
+    function isUscStudent() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('.+@usc[.]edu');
     }
 
     function uid() {
@@ -14,10 +18,10 @@ service cloud.firestore {
     }
 
     match /rides/{rideId} {
-      allow read, create, delete: if signedIn();
+      allow read, create, delete: if isUscStudent();
 
       // Only the organizer records the cost or hands the ride to someone else.
-      allow update: if signedIn()
+      allow update: if isUscStudent()
         && (resource.data.organizerId == uid()
             || !request.resource.data.diff(resource.data).affectedKeys()
                    .hasAny(['finalCost', 'organizerId']));
@@ -79,17 +83,17 @@ service cloud.firestore {
 
       // A missing share has to be readable too, the split transaction checks for one before
       // the first save.
-      allow get: if signedIn() && (resource == null || isMine());
-      allow list: if signedIn() && isMine();
-      allow create: if signedIn() && isSplitWrite();
-      allow update: if signedIn()
+      allow get: if isUscStudent() && (resource == null || isMine());
+      allow list: if isUscStudent() && isMine();
+      allow create: if isUscStudent() && isSplitWrite();
+      allow update: if isUscStudent()
         && ((resource.data.paidAt == null && isSplitWrite()) || isMarkPaid() || isFlag());
       allow delete: if false;
     }
 
     // Everything else stays open to signed-in students until its owner tightens it.
     match /{collection}/{document=**} {
-      allow read, write: if signedIn() && collection != 'payments' && collection != 'rides';
+      allow read, write: if isUscStudent() && collection != 'payments' && collection != 'rides';
     }
   }
 }

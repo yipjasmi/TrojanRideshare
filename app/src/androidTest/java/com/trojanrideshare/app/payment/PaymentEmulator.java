@@ -15,6 +15,8 @@ import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
@@ -170,8 +172,7 @@ final class PaymentEmulator {
 
     private String newUser(String name) throws Exception {
         String email = UUID.randomUUID() + "@usc.edu";
-        String uid = await(FirebaseAuth.getInstance()
-                .createUserWithEmailAndPassword(email, PASSWORD)).getUser().getUid();
+        String uid = signInWithGoogle(email).getUid();
         emails.put(uid, email);
         Map<String, Object> profile = new HashMap<>();
         profile.put("fullName", name);
@@ -180,7 +181,24 @@ final class PaymentEmulator {
     }
 
     void signIn(String uid) throws Exception {
-        await(FirebaseAuth.getInstance().signInWithEmailAndPassword(emails.get(uid), PASSWORD));
+        signInWithGoogle(emails.get(uid));
+    }
+
+    // The Auth emulator takes this JSON where real sign-in passes Google's signed token.
+    static FirebaseUser signInWithGoogle(String email) throws Exception {
+        String fakeIdToken = "{\"sub\":\"" + email + "\",\"email\":\"" + email
+                + "\",\"email_verified\":true}";
+        FirebaseUser user = await(FirebaseAuth.getInstance().signInWithCredential(
+                GoogleAuthProvider.getCredential(fakeIdToken, null)
+        )).getUser();
+        // Firestore hears about the new user on the main thread. A write sent before that goes out
+        // as the previous user and hangs, so let the main thread catch up first.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> { });
+        return user;
+    }
+
+    static void signUpWithPassword(String email) throws Exception {
+        await(FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, PASSWORD));
     }
 
     String seedRide(String status) throws Exception {

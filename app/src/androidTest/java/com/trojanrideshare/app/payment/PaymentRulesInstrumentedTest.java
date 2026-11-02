@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RunWith(AndroidJUnit4.class)
 public class PaymentRulesInstrumentedTest {
@@ -216,6 +217,33 @@ public class PaymentRulesInstrumentedTest {
 
         assertDenied(share(rideId, emulator.riderA).get());
         assertDenied(share(rideId, emulator.riderA).update("paid", true));
+    }
+
+    @Test
+    public void rules_refuseAccountsOutsideUsc() throws Exception {
+        String rideId = splitRide();
+
+        for (String domain : Arrays.asList("gmail.com", "usc.edu.evil.com", "notusc.edu")) {
+            PaymentEmulator.signInWithGoogle(UUID.randomUUID() + "@" + domain);
+            assertLockedOut(rideId);
+        }
+    }
+
+    @Test
+    public void rules_refuseAUscEmailNobodyVerified() throws Exception {
+        String rideId = splitRide();
+
+        PaymentEmulator.signUpWithPassword(UUID.randomUUID() + "@usc.edu");
+
+        assertLockedOut(rideId);
+    }
+
+    private void assertLockedOut(String rideId) throws Exception {
+        assertDenied(firestore().collection("rides").document(rideId).get());
+        assertDenied(firestore().collection("joinRequests").get());
+        assertDenied(share(rideId, emulator.riderA).get());
+        assertDenied(firestore().collection("users").document(emulator.stranger)
+                .update("fullName", "Not a student"));
     }
 
     @Test
