@@ -39,6 +39,7 @@ import com.trojanrideshare.app.model.SearchCriteria;
 import com.trojanrideshare.app.model.SortOption;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.service.search.SearchService;
+import com.trojanrideshare.app.util.BottomNavHelper;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -95,6 +96,7 @@ public class SearchActivity extends AppCompatActivity {
         setContentView(R.layout.activity_search);
 
         bindViews();
+        BottomNavHelper.setupBottomNav(this, R.id.nav_find);
         searchService = new SearchService();
         joinRequestService = new JoinRequestService();
         initializePlaces();

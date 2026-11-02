@@ -20,6 +20,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.ui.search.SearchActivity;
 import com.trojanrideshare.app.ui.search.OrganizerRequestsActivity;
+import com.trojanrideshare.app.util.BottomNavHelper;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -80,5 +81,7 @@ public class MainActivity extends AppCompatActivity {
             }
             startActivity(requestsIntent);
         });
+
+        BottomNavHelper.setupBottomNav(this, R.id.nav_home);
     }
 }

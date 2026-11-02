@@ -15,6 +15,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
+import com.trojanrideshare.app.util.BottomNavHelper;
 
 import java.util.List;
 
@@ -39,6 +40,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         organizerId = getIntent().getStringExtra(EXTRA_ORGANIZER_ID);
 
         findViewById(R.id.organizerRequestsBack).setOnClickListener(view -> finish());
+        BottomNavHelper.setupBottomNav(this, R.id.nav_requests);
         loadRequests();
     }
 
