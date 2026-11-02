@@ -44,6 +44,7 @@ service cloud.firestore {
           && ride.organizerId == uid()
           && ride.status == 'completed'
           && (share.userId == uid() || share.userId in ride.participantIds)
+          && (share.rideTitle == null || share.rideTitle is string)
           && share.amount is number
           && share.amount >= 0
           && share.amount <= 99999.99

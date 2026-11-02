@@ -419,6 +419,34 @@ public class PaymentFlowTest {
     }
 
     @Test
+    public void ridePayment_survivesBadParticipantIds() throws Exception {
+        String rideId = emulator.seedRide(
+                Ride.STATUS_COMPLETED,
+                Arrays.asList(emulator.riderA, "bad/id", "", null)
+        );
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            waitFor(withText("No final cost yet"));
+        }
+    }
+
+    @Test
+    public void recordCost_survivesBadParticipantIds() throws Exception {
+        String rideId = emulator.seedRide(
+                Ride.STATUS_COMPLETED,
+                Arrays.asList(emulator.riderA, "bad/id", "", null)
+        );
+
+        try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
+            enterCost("10");
+            onView(splitAmount("You")).check(matches(withText("$5.00")));
+            onView(splitAmount("Kyle Macasilli-Tan")).check(matches(withText("$5.00")));
+            reviewAndSave();
+            waitFor(withText("Still owed to you"));
+        }
+    }
+
+    @Test
     public void ridePayment_showsFlagOnlyOnceOverdue() throws Exception {
         String rideId = splitRide();
 

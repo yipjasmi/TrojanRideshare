@@ -45,10 +45,18 @@ public class Ride {
 
     @Exclude
     public List<String> getAllParticipantIds() {
-        Set<String> allParticipantIds = new LinkedHashSet<>();
-        allParticipantIds.add(organizerId);
+        List<String> candidateIds = new ArrayList<>();
+        candidateIds.add(organizerId);
         if (participantIds != null) {
-            allParticipantIds.addAll(participantIds);
+            candidateIds.addAll(participantIds);
+        }
+
+        // Any student can write participantIds, and Firestore throws on a bad document id.
+        Set<String> allParticipantIds = new LinkedHashSet<>();
+        for (String candidateId : candidateIds) {
+            if (candidateId != null && !candidateId.isEmpty() && !candidateId.contains("/")) {
+                allParticipantIds.add(candidateId);
+            }
         }
         return new ArrayList<>(allParticipantIds);
     }

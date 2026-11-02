@@ -347,6 +347,37 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
+    public void rules_refuseANonStringRideTitle() throws Exception {
+        String rideId = emulator.seedCompletedRide();
+        emulator.signIn(emulator.organizer);
+
+        Map<String, Object> fields = forgedShare(rideId, emulator.riderA, emulator.organizer);
+        fields.put("rideTitle", 123);
+        assertDenied(share(rideId, emulator.riderA).set(fields));
+    }
+
+    @Test
+    public void rules_refuseABackdatedAssignedAt() throws Exception {
+        String rideId = emulator.seedCompletedRide();
+        emulator.signIn(emulator.organizer);
+
+        Map<String, Object> fields = forgedShare(rideId, emulator.riderA, emulator.organizer);
+        fields.put("assignedAt", new Timestamp(1, 0));
+        assertDenied(share(rideId, emulator.riderA).set(fields));
+    }
+
+    @Test
+    public void saveSplit_worksForAnUntitledRide() throws Exception {
+        String rideId = emulator.seedCompletedRide();
+        emulator.signIn(emulator.organizer);
+        await(firestore().collection("rides").document(rideId).update("title", null));
+
+        saveSplit(rideId, new long[] {334, 333, 333}, 1000);
+
+        assertNull(await(share(rideId, emulator.riderA).get()).get("rideTitle"));
+    }
+
+    @Test
     public void saveSplit_reportsALockedSplitAsAFailure() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderA);

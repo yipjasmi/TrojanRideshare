@@ -63,4 +63,13 @@ public class RideTest {
 
         assertEquals(Collections.singletonList("organizer"), ride.getAllParticipantIds());
     }
+
+    @Test
+    public void allParticipantIds_skipsIdsThatCannotBeDocuments() {
+        Ride ride = new Ride();
+        ride.organizerId = "organizer";
+        ride.participantIds = Arrays.asList("rider", "bad/id", "", null);
+
+        assertEquals(Arrays.asList("organizer", "rider"), ride.getAllParticipantIds());
+    }
 }
