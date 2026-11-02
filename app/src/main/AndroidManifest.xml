@@ -24,6 +24,18 @@
             android:name=".ui.search.OrganizerRequestsActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.ride.CreateRideActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.ride.PlacePickerActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.ride.RideDetailActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.ride.EditRideActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize">

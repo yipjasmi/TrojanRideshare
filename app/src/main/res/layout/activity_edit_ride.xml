@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/editRideRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/edit_ride_title"
+            android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+
+        <EditText
+            android:id="@+id/titleInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:hint="@string/create_ride_title_hint"
+            android:importantForAutofill="no"
+            android:inputType="textCapSentences"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/titleError"
+            style="@style/FieldError" />
+
+        <EditText
+            android:id="@+id/originInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="false"
+            android:hint="@string/create_ride_origin_hint"
+            android:importantForAutofill="no"
+            android:inputType="none"
+            android:maxLines="2" />
+
+        <TextView
+            android:id="@+id/originError"
+            style="@style/FieldError" />
+
+        <EditText
+            android:id="@+id/destinationInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="false"
+            android:hint="@string/create_ride_destination_hint"
+            android:importantForAutofill="no"
+            android:inputType="none"
+            android:maxLines="2" />
+
+        <TextView
+            android:id="@+id/destinationError"
+            style="@style/FieldError" />
+
+        <EditText
+            android:id="@+id/departureInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="false"
+            android:hint="@string/create_ride_departure_hint"
+            android:importantForAutofill="no"
+            android:inputType="none"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/departureError"
+            style="@style/FieldError" />
+
+        <EditText
+            android:id="@+id/maxRidersInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="@string/create_ride_max_riders_hint"
+            android:importantForAutofill="no"
+            android:inputType="number"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/maxRidersError"
+            style="@style/FieldError" />
+
+        <EditText
+            android:id="@+id/costInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="@string/create_ride_cost_hint"
+            android:importantForAutofill="no"
+            android:inputType="numberDecimal"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/costError"
+            style="@style/FieldError" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/edit_ride_status_label"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+        <Spinner
+            android:id="@+id/statusSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:entries="@array/edit_ride_status_options" />
+
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/edit_ride_submit" />
+
+        <ProgressBar
+            android:id="@+id/editLoadingIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>

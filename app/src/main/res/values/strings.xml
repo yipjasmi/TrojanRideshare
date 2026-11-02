@@ -84,4 +84,51 @@
         <item quantity="one">%d seat available</item>
         <item quantity="other">%d seats available</item>
     </plurals>
+
+    <!-- Ride creation and management -->
+    <string name="main_create_action">Create a ride</string>
+
+    <string name="create_ride_title">Create a ride</string>
+    <string name="create_ride_title_hint">Title</string>
+    <string name="create_ride_origin_hint">Select origin</string>
+    <string name="create_ride_destination_hint">Select destination</string>
+    <string name="create_ride_departure_hint">Select departure time</string>
+    <string name="create_ride_max_riders_hint">Max riders (2–6)</string>
+    <string name="create_ride_cost_hint">Expected cost (USD)</string>
+    <string name="create_ride_submit">Post ride</string>
+    <string name="create_ride_success">Ride posted!</string>
+
+    <string name="place_picker_title">Search for a place</string>
+    <string name="place_picker_hint">Type an address or place</string>
+    <string name="place_picker_prompt">Start typing to search for a place.</string>
+    <string name="place_picker_error">Could not load suggestions. Please try again.</string>
+
+    <string name="ride_detail_title">Ride details</string>
+    <string name="ride_detail_organizer_format">Organized by %1$s</string>
+    <string name="ride_detail_cost_format">Expected cost: %1$s</string>
+    <string name="ride_detail_status_format">Status: %1$s</string>
+    <string name="ride_detail_badge_organizer">You are the organizer of this ride.</string>
+    <string name="ride_detail_badge_joined">You have joined this ride.</string>
+    <string name="ride_detail_load_error">Could not load this ride. Please try again.</string>
+    <string name="ride_detail_unknown_organizer">the organizer</string>
+    <string name="ride_detail_edit">Edit ride</string>
+
+    <string name="edit_ride_title">Edit ride</string>
+    <string name="edit_ride_status_label">Status</string>
+    <string name="edit_ride_submit">Save changes</string>
+    <string name="edit_ride_success">Ride updated.</string>
+    <string name="edit_ride_cancelled">Ride cancelled.</string>
+    <string name="edit_ride_load_error">Could not load this ride. Please try again.</string>
+
+    <string name="status_on_time">On Time</string>
+    <string name="status_delayed">Delayed</string>
+    <string name="status_cancelled">Cancelled</string>
+    <string name="status_completed">Completed</string>
+    <string name="status_unknown">Unknown</string>
+
+    <string-array name="edit_ride_status_options">
+        <item>@string/status_on_time</item>
+        <item>@string/status_delayed</item>
+        <item>@string/status_cancelled</item>
+    </string-array>
 </resources>

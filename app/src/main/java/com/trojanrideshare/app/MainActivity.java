@@ -13,6 +13,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.model.User;
+import com.trojanrideshare.app.ui.ride.CreateRideActivity;
 import com.trojanrideshare.app.ui.search.OrganizerRequestsActivity;
 import com.trojanrideshare.app.ui.search.SearchActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
@@ -53,6 +54,17 @@ public class MainActivity extends AppCompatActivity {
                 );
             }
             startActivity(requestsIntent);
+        });
+        findViewById(R.id.createRideButton).setOnClickListener(v -> {
+            Intent createIntent = new Intent(MainActivity.this, CreateRideActivity.class);
+            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser != null) {
+                createIntent.putExtra(
+                        CreateRideActivity.EXTRA_CURRENT_USER_ID,
+                        currentUser.getUid()
+                );
+            }
+            startActivity(createIntent);
         });
 
         BottomNavHelper.setupBottomNav(this, R.id.nav_home);
