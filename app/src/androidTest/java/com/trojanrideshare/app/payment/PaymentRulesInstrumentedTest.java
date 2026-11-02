@@ -1,8 +1,9 @@
 package com.trojanrideshare.app.payment;
 
 import static com.trojanrideshare.app.payment.PaymentEmulator.assertDenied;
+import static com.trojanrideshare.app.payment.PaymentEmulator.assertFailure;
 import static com.trojanrideshare.app.payment.PaymentEmulator.await;
-import static com.trojanrideshare.app.payment.PaymentEmulator.db;
+import static com.trojanrideshare.app.payment.PaymentEmulator.firestore;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -18,10 +19,10 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.trojanrideshare.app.data.joinrequest.JoinRequestDataAccess;
 import com.trojanrideshare.app.data.joinrequest.JoinRequestRepository;
+import com.trojanrideshare.app.data.payment.PaymentDataAccess;
 import com.trojanrideshare.app.data.payment.PaymentRepository;
 import com.trojanrideshare.app.model.JoinRequest;
 import com.trojanrideshare.app.model.Ride;
-import com.trojanrideshare.app.service.payment.PaymentService;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -33,12 +34,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Talks to the Firestore emulator with firestore.rules loaded, as the user each attack would use.
-// Direct writes on purpose: these prove what the database refuses, not what the screens hide.
 @RunWith(AndroidJUnit4.class)
 public class PaymentRulesInstrumentedTest {
     private PaymentEmulator emulator;
-    private final PaymentService service = new PaymentService();
 
     @Before
     public void setUp() throws Exception {
@@ -48,8 +46,23 @@ public class PaymentRulesInstrumentedTest {
     private String splitRide() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.organizer);
-        await(service.saveSplit(rideId, emulator.organizer, participants(), new long[] {334, 333, 333}, 1000));
+        saveSplit(rideId, new long[] {334, 333, 333}, 1000);
         return rideId;
+    }
+
+    private void saveSplit(String rideId, long[] shares, long finalCents) throws Exception {
+        await(PaymentEmulator.saveSplit(
+                rideId,
+                emulator.organizer,
+                participants(),
+                shares,
+                finalCents
+        ));
+    }
+
+    private double finalCost(String rideId) throws Exception {
+        return await(firestore().collection("rides").document(rideId).get())
+                .getDouble("finalCost");
     }
 
     private List<String> participants() {
@@ -57,7 +70,9 @@ public class PaymentRulesInstrumentedTest {
     }
 
     private DocumentReference share(String rideId, String userId) {
-        return db().collection("payments").document(PaymentRepository.paymentId(rideId, userId));
+        return firestore()
+                .collection("payments")
+                .document(PaymentDataAccess.paymentDocumentId(rideId, userId));
     }
 
     private Map<String, Object> forgedShare(String rideId, String userId, String organizerId) {
@@ -76,10 +91,10 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
-    public void organizerSplitIsWrittenAtomicallyAndSumsToTheFinalCost() throws Exception {
+    public void saveSplit_writesEveryShareAndTheFinalCostTogether() throws Exception {
         String rideId = splitRide();
 
-        assertEquals(10.0, await(db().collection("rides").document(rideId).get()).getDouble("finalCost"), 0);
+        assertEquals(10.0, finalCost(rideId), 0);
         DocumentSnapshot organizerShare = await(share(rideId, emulator.organizer).get());
         DocumentSnapshot riderShare = await(share(rideId, emulator.riderA).get());
         assertEquals(3.34, organizerShare.getDouble("amount"), 0);
@@ -92,94 +107,102 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
-    public void savingTheSplitAgainOverwritesInsteadOfDuplicating() throws Exception {
+    public void saveSplit_overwritesInsteadOfDuplicating() throws Exception {
         String rideId = splitRide();
-        await(service.saveSplit(rideId, emulator.organizer, participants(), new long[] {400, 400, 400}, 1200));
+        saveSplit(rideId, new long[] {400, 400, 400}, 1200);
 
-        List<DocumentSnapshot> shares = await(db().collection("payments")
+        List<DocumentSnapshot> shares = await(firestore().collection("payments")
                 .whereEqualTo("rideId", rideId)
                 .whereEqualTo("organizerId", emulator.organizer).get()).getDocuments();
         assertEquals(3, shares.size());
-        assertEquals(12.0, await(db().collection("rides").document(rideId).get()).getDouble("finalCost"), 0);
+        assertEquals(12.0, finalCost(rideId), 0);
     }
 
     @Test
-    public void aZeroShareIsSettledAndDoesNotLockTheSplit() throws Exception {
+    public void saveSplit_settlesZeroSharesWithoutLockingTheSplit() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.organizer);
-        await(service.saveSplit(rideId, emulator.organizer, participants(), new long[] {1000, 0, 0}, 1000));
+        saveSplit(rideId, new long[] {1000, 0, 0}, 1000);
 
         DocumentSnapshot zero = await(share(rideId, emulator.riderA).get());
         assertTrue(zero.getBoolean("paid"));
         assertNull(zero.get("paidAt"));
 
-        await(service.saveSplit(rideId, emulator.organizer, participants(), new long[] {400, 300, 300}, 1000));
+        saveSplit(rideId, new long[] {400, 300, 300}, 1000);
         assertFalse(await(share(rideId, emulator.riderA).get()).getBoolean("paid"));
     }
 
     @Test
-    public void aRiderCannotWriteASplit() throws Exception {
+    public void rules_refuseASplitFromARider() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.riderA);
 
-        // Billing another rider, so the only clauses left to refuse this are the organizer checks.
-        assertDenied(share(rideId, emulator.riderB).set(forgedShare(rideId, emulator.riderB, emulator.organizer)));
-        assertDenied(share(rideId, emulator.riderB).set(forgedShare(rideId, emulator.riderB, emulator.riderA)));
-        assertDenied(db().collection("rides").document(rideId).update("finalCost", 1.0));
+        assertDenied(share(rideId, emulator.riderB)
+                .set(forgedShare(rideId, emulator.riderB, emulator.organizer)));
+        assertDenied(share(rideId, emulator.riderB)
+                .set(forgedShare(rideId, emulator.riderB, emulator.riderA)));
+        assertDenied(firestore().collection("rides").document(rideId).update("finalCost", 1.0));
     }
 
     @Test
-    public void theOrganizerCannotNameSomeoneElseAsOrganizerOnAShare() throws Exception {
+    public void rules_refuseNamingAnotherOrganizerOnAShare() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.organizer);
 
-        assertDenied(share(rideId, emulator.riderA).set(forgedShare(rideId, emulator.riderA, emulator.stranger)));
+        assertDenied(share(rideId, emulator.riderA)
+                .set(forgedShare(rideId, emulator.riderA, emulator.stranger)));
     }
 
     @Test
-    public void aStrangerCannotTakeOverARideToSplitIt() throws Exception {
+    public void rules_refuseAStrangerTakingOverARide() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.stranger);
 
-        assertDenied(db().collection("rides").document(rideId).update("organizerId", emulator.stranger));
+        assertDenied(firestore()
+                .collection("rides")
+                .document(rideId)
+                .update("organizerId", emulator.stranger));
     }
 
     @Test
-    public void theOrganizerCannotSplitARideThatIsNotCompleted() throws Exception {
+    public void rules_refuseSplittingAnUncompletedRide() throws Exception {
         String rideId = emulator.seedRide(Ride.STATUS_ON_TIME);
         emulator.signIn(emulator.organizer);
 
-        assertDenied(share(rideId, emulator.riderA).set(forgedShare(rideId, emulator.riderA, emulator.organizer)));
+        assertDenied(share(rideId, emulator.riderA)
+                .set(forgedShare(rideId, emulator.riderA, emulator.organizer)));
     }
 
     @Test
-    public void theOrganizerCannotBillSomeoneWhoWasNotOnTheRide() throws Exception {
+    public void rules_refuseBillingSomeoneNotOnTheRide() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.organizer);
 
-        assertDenied(share(rideId, emulator.stranger).set(forgedShare(rideId, emulator.stranger, emulator.organizer)));
+        assertDenied(share(rideId, emulator.stranger)
+                .set(forgedShare(rideId, emulator.stranger, emulator.organizer)));
     }
 
     @Test
-    public void shareIdMustMatchItsContents() throws Exception {
+    public void rules_refuseAShareIdThatDoesNotMatchItsContents() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.organizer);
 
-        assertDenied(share(rideId, emulator.riderB).set(forgedShare(rideId, emulator.riderA, emulator.organizer)));
+        assertDenied(share(rideId, emulator.riderB)
+                .set(forgedShare(rideId, emulator.riderA, emulator.organizer)));
     }
 
     @Test
-    public void aRiderCannotSeeAnotherRidersShare() throws Exception {
+    public void rules_hideOtherRidersShares() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderB);
 
         assertDenied(share(rideId, emulator.riderA).get());
-        assertDenied(db().collection("payments").whereEqualTo("rideId", rideId).get());
-        assertDenied(db().collection("payments").get());
+        assertDenied(firestore().collection("payments").whereEqualTo("rideId", rideId).get());
+        assertDenied(firestore().collection("payments").get());
     }
 
     @Test
-    public void aRiderCanStillReadTheirOwnShare() throws Exception {
+    public void rules_letARiderReadTheirOwnShare() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderA);
 
@@ -187,7 +210,7 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
-    public void signedOutUsersGetNothing() throws Exception {
+    public void rules_refuseSignedOutUsers() throws Exception {
         String rideId = splitRide();
         FirebaseAuth.getInstance().signOut();
 
@@ -196,25 +219,25 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
-    public void onlyTheRiderCanMarkTheirOwnSharePaid() throws Exception {
+    public void markPaid_onlyWorksForTheRidersOwnShare() throws Exception {
         String rideId = splitRide();
 
         emulator.signIn(emulator.riderB);
-        assertDenied(service.markPaid(rideId, emulator.riderA));
+        assertDenied(PaymentEmulator.markPaid(rideId, emulator.riderA));
         emulator.signIn(emulator.organizer);
-        assertDenied(service.markPaid(rideId, emulator.riderA));
+        assertDenied(PaymentEmulator.markPaid(rideId, emulator.riderA));
         emulator.signIn(emulator.stranger);
-        assertDenied(service.markPaid(rideId, emulator.riderA));
+        assertDenied(PaymentEmulator.markPaid(rideId, emulator.riderA));
 
         emulator.signIn(emulator.riderA);
-        await(service.markPaid(rideId, emulator.riderA));
+        await(PaymentEmulator.markPaid(rideId, emulator.riderA));
         DocumentSnapshot marked = await(share(rideId, emulator.riderA).get());
         assertTrue(marked.getBoolean("paid"));
         assertTrue(marked.getTimestamp("paidAt") != null);
     }
 
     @Test
-    public void markingPaidCannotAlsoChangeTheAmount() throws Exception {
+    public void rules_refuseChangingTheAmountWhileMarkingPaid() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderA);
 
@@ -229,71 +252,84 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
-    public void paidAtCannotBeBackdatedByTheRider() throws Exception {
+    public void rules_refuseABackdatedPaidAt() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderA);
 
-        assertDenied(share(rideId, emulator.riderA).update("paid", true,
-                "paidAt", new com.google.firebase.Timestamp(1, 0)));
+        assertDenied(share(rideId, emulator.riderA).update(
+                "paid", true,
+                "paidAt", new Timestamp(1, 0)
+        ));
     }
 
     @Test
-    public void aPaidShareCannotBeUnpaidOrResplit() throws Exception {
+    public void rules_refuseUnpayingOrResplittingAPaidShare() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderA);
-        await(service.markPaid(rideId, emulator.riderA));
+        await(PaymentEmulator.markPaid(rideId, emulator.riderA));
 
         assertDenied(share(rideId, emulator.riderA).update("paid", false));
 
         emulator.signIn(emulator.organizer);
-        assertDenied(share(rideId, emulator.riderA).set(forgedShare(rideId, emulator.riderA, emulator.organizer)));
+        assertDenied(share(rideId, emulator.riderA)
+                .set(forgedShare(rideId, emulator.riderA, emulator.organizer)));
     }
 
     @Test
-    public void aRiderCannotFlagOrClearAFlag() throws Exception {
+    public void rules_refuseARiderFlaggingOrClearingAFlag() throws Exception {
         String rideId = splitRide();
-        emulator.backdateShare(PaymentRepository.paymentId(rideId, emulator.riderA), 8);
+        emulator.backdateShare(
+                PaymentDataAccess.paymentDocumentId(rideId, emulator.riderA),
+                8
+        );
 
         emulator.signIn(emulator.riderB);
-        assertDenied(service.flag(rideId, emulator.riderA));
+        assertDenied(PaymentEmulator.flag(rideId, emulator.riderA));
 
         emulator.signIn(emulator.organizer);
-        await(service.flag(rideId, emulator.riderA));
+        await(PaymentEmulator.flag(rideId, emulator.riderA));
 
         emulator.signIn(emulator.riderA);
         assertDenied(share(rideId, emulator.riderA).update("flagged", false));
     }
 
     @Test
-    public void theOrganizerCannotFlagBeforeTheApprovalPeriodEnds() throws Exception {
+    public void rules_refuseFlaggingBeforeTheApprovalPeriodEnds() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.organizer);
 
-        // Past the service's own check, so this is the rule alone saying no.
-        assertDenied(share(rideId, emulator.riderA).update("flagged", true,
-                "flaggedAt", FieldValue.serverTimestamp()));
+        assertDenied(share(rideId, emulator.riderA).update(
+                "flagged", true,
+                "flaggedAt", FieldValue.serverTimestamp()
+        ));
     }
 
     @Test
-    public void theOrganizerCanFlagAfterTheApprovalPeriodEnds() throws Exception {
+    public void flag_worksAfterTheApprovalPeriodEnds() throws Exception {
         String rideId = splitRide();
-        emulator.backdateShare(PaymentRepository.paymentId(rideId, emulator.riderA), 8);
+        emulator.backdateShare(
+                PaymentDataAccess.paymentDocumentId(rideId, emulator.riderA),
+                8
+        );
         emulator.signIn(emulator.organizer);
 
-        await(service.flag(rideId, emulator.riderA));
+        await(PaymentEmulator.flag(rideId, emulator.riderA));
 
         assertTrue(await(share(rideId, emulator.riderA).get()).getBoolean("flagged"));
     }
 
     @Test
-    public void markingPaidClearsTheFlag() throws Exception {
+    public void markPaid_clearsTheFlag() throws Exception {
         String rideId = splitRide();
-        emulator.backdateShare(PaymentRepository.paymentId(rideId, emulator.riderA), 8);
+        emulator.backdateShare(
+                PaymentDataAccess.paymentDocumentId(rideId, emulator.riderA),
+                8
+        );
         emulator.signIn(emulator.organizer);
-        await(service.flag(rideId, emulator.riderA));
+        await(PaymentEmulator.flag(rideId, emulator.riderA));
 
         emulator.signIn(emulator.riderA);
-        await(service.markPaid(rideId, emulator.riderA));
+        await(PaymentEmulator.markPaid(rideId, emulator.riderA));
 
         DocumentSnapshot marked = await(share(rideId, emulator.riderA).get());
         assertTrue(marked.getBoolean("paid"));
@@ -301,7 +337,7 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
-    public void nobodyCanDeleteAShare() throws Exception {
+    public void rules_refuseDeletingAShare() throws Exception {
         String rideId = splitRide();
 
         emulator.signIn(emulator.organizer);
@@ -310,10 +346,68 @@ public class PaymentRulesInstrumentedTest {
         assertDenied(share(rideId, emulator.riderA).delete());
     }
 
-    // Who gets billed is whoever the join flow put in participantIds, so that flow has to get
-    // through these rules too.
     @Test
-    public void aRiderWhoJoinsByRequestCanBeBilledAndPay() throws Exception {
+    public void saveSplit_reportsALockedSplitAsAFailure() throws Exception {
+        String rideId = splitRide();
+        emulator.signIn(emulator.riderA);
+        await(PaymentEmulator.markPaid(rideId, emulator.riderA));
+
+        emulator.signIn(emulator.organizer);
+        assertFailure(
+                PaymentRepository.Failure.SPLIT_LOCKED,
+                PaymentEmulator.saveSplit(
+                        rideId,
+                        emulator.organizer,
+                        participants(),
+                        new long[] {400, 300, 300},
+                        1000
+                )
+        );
+    }
+
+    @Test
+    public void saveSplit_reportsChangedRidersAsAFailure() throws Exception {
+        String rideId = emulator.seedCompletedRide();
+        emulator.signIn(emulator.organizer);
+
+        assertFailure(
+                PaymentRepository.Failure.RIDERS_CHANGED,
+                PaymentEmulator.saveSplit(
+                        rideId,
+                        emulator.organizer,
+                        Arrays.asList(emulator.organizer, emulator.riderA),
+                        new long[] {500, 500},
+                        1000
+                )
+        );
+    }
+
+    @Test
+    public void flag_reportsAShareThatIsNotOverdueAsAFailure() throws Exception {
+        String rideId = splitRide();
+        emulator.signIn(emulator.organizer);
+
+        assertFailure(
+                PaymentRepository.Failure.NOT_OVERDUE,
+                PaymentEmulator.flag(rideId, emulator.riderA)
+        );
+    }
+
+    @Test
+    public void flag_reportsAPaidShareAsAFailure() throws Exception {
+        String rideId = splitRide();
+        emulator.signIn(emulator.riderA);
+        await(PaymentEmulator.markPaid(rideId, emulator.riderA));
+
+        emulator.signIn(emulator.organizer);
+        assertFailure(
+                PaymentRepository.Failure.ALREADY_PAID,
+                PaymentEmulator.flag(rideId, emulator.riderA)
+        );
+    }
+
+    @Test
+    public void joinRequest_letsARiderBeBilledAndPay() throws Exception {
         String rideId = emulator.seedRide(Ride.STATUS_ON_TIME, new ArrayList<>());
         JoinRequestDataAccess joinRequests = new JoinRequestDataAccess();
 
@@ -322,17 +416,28 @@ public class PaymentRulesInstrumentedTest {
 
         emulator.signIn(emulator.organizer);
         acceptJoinRequest(joinRequests, rideId, emulator.riderA);
-        await(db().collection("rides").document(rideId).update("status", Ride.STATUS_COMPLETED));
-        await(service.saveSplit(rideId, emulator.organizer,
-                Arrays.asList(emulator.organizer, emulator.riderA), new long[] {500, 500}, 1000));
+        await(firestore()
+                .collection("rides")
+                .document(rideId)
+                .update("status", Ride.STATUS_COMPLETED));
+        await(PaymentEmulator.saveSplit(
+                rideId,
+                emulator.organizer,
+                Arrays.asList(emulator.organizer, emulator.riderA),
+                new long[] {500, 500},
+                1000
+        ));
 
         emulator.signIn(emulator.riderA);
-        await(service.markPaid(rideId, emulator.riderA));
+        await(PaymentEmulator.markPaid(rideId, emulator.riderA));
         assertTrue(await(share(rideId, emulator.riderA).get()).getBoolean("paid"));
     }
 
-    private void submitJoinRequest(JoinRequestDataAccess joinRequests, String rideId, String riderId)
-            throws Exception {
+    private void submitJoinRequest(
+            JoinRequestDataAccess joinRequests,
+            String rideId,
+            String riderId
+    ) throws Exception {
         JoinRequest request = new JoinRequest();
         request.rideId = rideId;
         request.requesterId = riderId;
@@ -359,10 +464,16 @@ public class PaymentRulesInstrumentedTest {
         await(done.getTask());
     }
 
-    private void acceptJoinRequest(JoinRequestDataAccess joinRequests, String rideId, String riderId)
-            throws Exception {
+    private void acceptJoinRequest(
+            JoinRequestDataAccess joinRequests,
+            String rideId,
+            String riderId
+    ) throws Exception {
         TaskCompletionSource<Void> done = new TaskCompletionSource<>();
-        joinRequests.accept(rideId, riderId, emulator.organizer,
+        joinRequests.accept(
+                rideId,
+                riderId,
+                emulator.organizer,
                 new JoinRequestRepository.DecisionCallback() {
                     @Override
                     public void onSuccess() {
@@ -378,7 +489,8 @@ public class PaymentRulesInstrumentedTest {
                     public void onError(Exception exception) {
                         done.setException(exception);
                     }
-                });
+                }
+        );
         await(done.getTask());
     }
 }

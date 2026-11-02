@@ -18,7 +18,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withParent;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static com.trojanrideshare.app.payment.PaymentEmulator.await;
-import static com.trojanrideshare.app.payment.PaymentEmulator.db;
+import static com.trojanrideshare.app.payment.PaymentEmulator.firestore;
 import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
@@ -38,9 +38,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
-import com.trojanrideshare.app.data.payment.PaymentRepository;
+import com.trojanrideshare.app.data.payment.PaymentDataAccess;
 import com.trojanrideshare.app.model.Ride;
-import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.ui.payment.PaymentsActivity;
 import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.payment.RidePaymentActivity;
@@ -52,13 +51,11 @@ import org.junit.runner.RunWith;
 
 import java.util.Arrays;
 
-// Runs the real screens against the emulator with firestore.rules loaded.
 @RunWith(AndroidJUnit4.class)
 public class PaymentFlowTest {
     private static final long TIMEOUT_MILLIS = 10_000;
 
     private PaymentEmulator emulator;
-    private final PaymentService service = new PaymentService();
     private final Context context = ApplicationProvider.getApplicationContext();
 
     @Before
@@ -95,13 +92,22 @@ public class PaymentFlowTest {
     }
 
     private static Matcher<View> customInput(String name) {
-        return allOf(withId(R.id.splitCustomInput),
-                isDescendantOfA(allOf(withId(R.id.splitCustomLayout), withParent(withChild(withText(name))))));
+        return allOf(
+                withId(R.id.splitCustomInput),
+                isDescendantOfA(allOf(
+                        withId(R.id.splitCustomLayout),
+                        withParent(withChild(withText(name)))
+                ))
+        );
     }
 
     private static void enterCost(String cost) {
         waitFor(withId(R.id.costInput));
         onView(withId(R.id.costInput)).perform(replaceText(cost), closeSoftKeyboard());
+    }
+
+    private static void enterCustomAmount(String name, String amount) {
+        onView(customInput(name)).perform(replaceText(amount), closeSoftKeyboard());
     }
 
     private void reviewAndSave() {
@@ -110,28 +116,43 @@ public class PaymentFlowTest {
     }
 
     private ActivityScenario<RecordCostActivity> openRecordCost(String rideId) {
-        return ActivityScenario.launch(RecordCostActivity.intent(context, rideId));
+        Intent costIntent = new Intent(context, RecordCostActivity.class);
+        costIntent.putExtra(RecordCostActivity.EXTRA_RIDE_ID, rideId);
+        return ActivityScenario.launch(costIntent);
     }
 
     private ActivityScenario<RidePaymentActivity> openRidePayment(String rideId) {
-        return ActivityScenario.launch(RidePaymentActivity.intent(context, rideId));
+        Intent rideIntent = new Intent(context, RidePaymentActivity.class);
+        rideIntent.putExtra(RidePaymentActivity.EXTRA_RIDE_ID, rideId);
+        return ActivityScenario.launch(rideIntent);
     }
 
     private String splitRide() throws Exception {
         String rideId = emulator.seedCompletedRide();
-        await(service.saveSplit(rideId, emulator.organizer,
+        await(PaymentEmulator.saveSplit(
+                rideId,
+                emulator.organizer,
                 Arrays.asList(emulator.organizer, emulator.riderA, emulator.riderB),
-                new long[] {334, 333, 333}, 1000));
+                new long[] {334, 333, 333},
+                1000
+        ));
         return rideId;
     }
 
+    private double finalCost(String rideId) throws Exception {
+        return await(firestore().collection("rides").document(rideId).get())
+                .getDouble("finalCost");
+    }
+
     private DocumentSnapshot share(String rideId, String userId) throws Exception {
-        return await(db().collection("payments")
-                .document(PaymentRepository.paymentId(rideId, userId)).get());
+        return await(firestore()
+                .collection("payments")
+                .document(PaymentDataAccess.paymentDocumentId(rideId, userId))
+                .get());
     }
 
     @Test
-    public void evenSplitPreviewsEachShareThenSaves() throws Exception {
+    public void recordCost_previewsAnEvenSplitThenSaves() throws Exception {
         String rideId = emulator.seedCompletedRide();
 
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
@@ -155,12 +176,11 @@ public class PaymentFlowTest {
         }
 
         assertEquals(3.33, share(rideId, emulator.riderA).getDouble("amount"), 0);
-        assertEquals(10.0, await(db().collection("rides").document(rideId).get())
-                .getDouble("finalCost"), 0);
+        assertEquals(10.0, finalCost(rideId), 0);
     }
 
     @Test
-    public void customSplitMustAddUpBeforeItCanBeSaved() throws Exception {
+    public void recordCost_blocksACustomSplitThatDoesNotAddUp() throws Exception {
         String rideId = emulator.seedCompletedRide();
 
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
@@ -168,20 +188,20 @@ public class PaymentFlowTest {
             onView(withId(R.id.splitCustomButton)).perform(click());
             onView(customInput("You")).check(matches(withText("16.01")));
 
-            onView(customInput("Kyle Macasilli-Tan")).perform(replaceText("20"), closeSoftKeyboard());
+            enterCustomAmount("Kyle Macasilli-Tan", "20");
             onView(withId(R.id.splitSummary)).check(matches(withText(containsString("over"))));
             onView(withId(R.id.reviewButton)).perform(click());
             onView(withId(R.id.formError))
-                    .check(matches(withText("Shares are $4.00 over the final cost")));
+                    .check(matches(withText("Shares are $4.00 over the final cost.")));
             assertFalse(share(rideId, emulator.riderA).exists());
 
-            onView(customInput("Kyle Macasilli-Tan")).perform(replaceText(""), closeSoftKeyboard());
+            enterCustomAmount("Kyle Macasilli-Tan", "");
             onView(withId(R.id.reviewButton)).perform(click());
-            onView(withText("Enter an amount")).check(matches(isDisplayed()));
+            onView(withText("Enter an amount.")).check(matches(isDisplayed()));
             assertFalse(share(rideId, emulator.riderA).exists());
 
-            onView(customInput("Kyle Macasilli-Tan")).perform(replaceText("16.00"), closeSoftKeyboard());
-            onView(customInput("Yucheng Zhao")).perform(replaceText("16.00"), closeSoftKeyboard());
+            enterCustomAmount("Kyle Macasilli-Tan", "16.00");
+            enterCustomAmount("Yucheng Zhao", "16.00");
             onView(withId(R.id.splitSummary)).check(matches(withText(containsString("matches"))));
             reviewAndSave();
             waitFor(withText("Still owed to you"));
@@ -192,13 +212,13 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void customAmountsSurviveARotation() throws Exception {
+    public void recordCost_keepsCustomAmountsAcrossARotation() throws Exception {
         String rideId = emulator.seedCompletedRide();
 
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
             enterCost("30");
             onView(withId(R.id.splitCustomButton)).perform(click());
-            onView(customInput("Kyle Macasilli-Tan")).perform(replaceText("12.34"), closeSoftKeyboard());
+            enterCustomAmount("Kyle Macasilli-Tan", "12.34");
 
             screen.recreate();
 
@@ -209,15 +229,17 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void savingOfflineSaysSoAndWritesNothing() throws Exception {
+    public void recordCost_reportsOfflineSavesAndWritesNothing() throws Exception {
         String rideId = emulator.seedCompletedRide();
 
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
             enterCost("10");
             PaymentEmulator.setAirplaneMode(true);
             reviewAndSave();
-            waitFor(allOf(withId(R.id.formError),
-                    withText("You're offline. Connect and try again.")), 90_000);
+            waitFor(allOf(
+                    withId(R.id.formError),
+                    withText("Unable to save this split. You are offline. Connect and try again.")
+            ), 90_000);
         } finally {
             PaymentEmulator.setAirplaneMode(false);
         }
@@ -226,65 +248,65 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void offlineListIsAFailureNotAnEmptyList() throws Exception {
+    public void paymentsList_treatsOfflineAsAFailureNotAnEmptyList() throws Exception {
         emulator.seedCompletedRide();
         splitRide();
         Intent list = new Intent(context, PaymentsActivity.class);
-        await(db().disableNetwork());
+        await(firestore().disableNetwork());
 
         try (ActivityScenario<PaymentsActivity> screen = ActivityScenario.launch(list)) {
-            waitFor(withText(containsString("Couldn't load your rides.")));
-            waitFor(withText(containsString("Couldn't load your shares.")));
-            onView(withText(containsString("No ride costs yet"))).check(matches(not(isDisplayed())));
+            waitFor(withText(containsString("Unable to load your rides.")));
+            waitFor(withText(containsString("Unable to load your shares.")));
+            onView(withText(containsString("No ride costs yet")))
+                    .check(matches(not(isDisplayed())));
 
-            await(db().enableNetwork());
+            await(firestore().enableNetwork());
             onView(allOf(withId(R.id.sectionRetry), isDescendantOfA(withId(R.id.ridesSection))))
                     .perform(click());
             waitFor(withText("0 of 2 riders paid"));
         } finally {
-            await(db().enableNetwork());
+            await(firestore().enableNetwork());
         }
     }
 
     @Test
-    public void offlineRiderIsNotToldThereIsNoCostYet() throws Exception {
+    public void ridePayment_doesNotTellAnOfflineRiderThereIsNoCost() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderA);
-        // Enough for the ride itself to load, then the share listener is what goes offline.
-        await(db().collection("rides").document(rideId).get());
-        await(db().disableNetwork());
+        await(firestore().collection("rides").document(rideId).get());
+        await(firestore().disableNetwork());
 
         try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
-            waitFor(withText("You're offline. Connect and try again."));
+            waitFor(withText(containsString("You are offline. Connect and try again.")));
             onView(withId(R.id.amountValue)).check(matches(not(isDisplayed())));
         } finally {
-            await(db().enableNetwork());
+            await(firestore().enableNetwork());
         }
     }
 
     @Test
-    public void badFinalCostsShowAFieldErrorAndWriteNothing() throws Exception {
+    public void recordCost_showsFieldErrorsForBadCosts() throws Exception {
         String rideId = emulator.seedCompletedRide();
 
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
             enterCost("0");
             onView(withId(R.id.reviewButton)).perform(click());
-            onView(withText("Final cost must be greater than $0")).check(matches(isDisplayed()));
+            onView(withText("Final cost must be greater than $0.")).check(matches(isDisplayed()));
 
             enterCost("12.345");
             onView(withId(R.id.reviewButton)).perform(click());
-            onView(withText("Use no more than two decimal places")).check(matches(isDisplayed()));
+            onView(withText("Use no more than two decimal places.")).check(matches(isDisplayed()));
 
             enterCost("");
             onView(withId(R.id.reviewButton)).perform(click());
-            onView(withText("Enter the final cost")).check(matches(isDisplayed()));
+            onView(withText("Enter the final cost.")).check(matches(isDisplayed()));
         }
 
         assertFalse(share(rideId, emulator.riderA).exists());
     }
 
     @Test
-    public void onlyTheOrganizerGetsTheCostForm() throws Exception {
+    public void recordCost_blocksEveryoneButTheOrganizer() throws Exception {
         String rideId = emulator.seedCompletedRide();
         emulator.signIn(emulator.riderA);
 
@@ -295,7 +317,7 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void aRideThatIsNotCompletedHasNoCostForm() throws Exception {
+    public void recordCost_blocksARideThatIsNotCompleted() throws Exception {
         String rideId = emulator.seedRide(Ride.STATUS_CANCELLED);
 
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
@@ -304,7 +326,7 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void riderSeesTheirShareAndMarksItPaid() throws Exception {
+    public void ridePayment_letsARiderMarkTheirSharePaid() throws Exception {
         String rideId = splitRide();
         emulator.signIn(emulator.riderA);
 
@@ -329,7 +351,7 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void organizerSeesEachRidersStatusUpdateLive() throws Exception {
+    public void ridePayment_updatesTheOrganizerLive() throws Exception {
         String rideId = splitRide();
 
         try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
@@ -339,9 +361,9 @@ public class PaymentFlowTest {
             onView(withId(R.id.amountValue)).check(matches(withText("$6.66")));
             onView(withId(R.id.primaryAction)).check(matches(withText("Edit split")));
 
-            // Same open screen, no reload: the rider's change has to arrive on its own.
             emulator.markPaidFromAnotherDevice(
-                    PaymentRepository.paymentId(rideId, emulator.riderA));
+                    PaymentDataAccess.paymentDocumentId(rideId, emulator.riderA)
+            );
 
             waitFor(shareRow("Kyle Macasilli-Tan", "Paid "));
             waitFor(shareRow("Yucheng Zhao", "Unpaid"));
@@ -352,7 +374,7 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void organizerCanEditTheSplitUntilARiderPays() throws Exception {
+    public void ridePayment_letsTheOrganizerEditUntilARiderPays() throws Exception {
         String rideId = splitRide();
 
         try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
@@ -362,17 +384,15 @@ public class PaymentFlowTest {
             enterCost("13");
             reviewAndSave();
 
-            // Back from the saved split lands on the list, not a stale copy of this screen.
             waitFor(allOf(withId(R.id.amountValue), withText("$8.66")));
             screen.onActivity(activity -> assertFalse(activity.isFinishing()));
         }
 
         waitForShareAmount(rideId, 4.33);
-        assertEquals(13.0, await(db().collection("rides").document(rideId).get())
-                .getDouble("finalCost"), 0);
+        assertEquals(13.0, finalCost(rideId), 0);
 
         emulator.signIn(emulator.riderA);
-        await(service.markPaid(rideId, emulator.riderA));
+        await(PaymentEmulator.markPaid(rideId, emulator.riderA));
         emulator.signIn(emulator.organizer);
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
             waitFor(withText("A rider already marked their share paid, so this split is locked."));
@@ -388,7 +408,18 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void flagOnlyAppearsOnceTheShareIsOverdue() throws Exception {
+    public void ridePayment_survivesBeingRecreatedWhileItLoads() throws Exception {
+        String rideId = splitRide();
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            screen.recreate();
+            screen.recreate();
+            waitFor(shareRow("Kyle Macasilli-Tan", "Unpaid"));
+        }
+    }
+
+    @Test
+    public void ridePayment_showsFlagOnlyOnceOverdue() throws Exception {
         String rideId = splitRide();
 
         try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
@@ -396,7 +427,10 @@ public class PaymentFlowTest {
             onView(allOf(withText("Flag"), isDisplayed())).check(doesNotExist());
         }
 
-        emulator.backdateShare(PaymentRepository.paymentId(rideId, emulator.riderA), 8);
+        emulator.backdateShare(
+                PaymentDataAccess.paymentDocumentId(rideId, emulator.riderA),
+                8
+        );
 
         try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
             waitFor(shareRow("Kyle Macasilli-Tan", "Overdue"));
@@ -412,7 +446,7 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void paymentsListShowsWhatIsOwedOnBothSides() throws Exception {
+    public void paymentsList_showsWhatIsOwedOnBothSides() throws Exception {
         emulator.seedCompletedRide();
         splitRide();
         Intent list = new Intent(context, PaymentsActivity.class);
@@ -434,7 +468,7 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void paymentsListExplainsItselfWhenThereIsNothingYet() throws Exception {
+    public void paymentsList_explainsItselfWhenEmpty() throws Exception {
         emulator.signIn(emulator.stranger);
         Intent list = new Intent(context, PaymentsActivity.class);
 
@@ -444,7 +478,7 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void theHomeScreenOpensPaymentsBelowTheOtherButtons() throws Exception {
+    public void home_opensPaymentsBelowTheOtherButtons() throws Exception {
         emulator.signIn(emulator.stranger);
         Intent home = new Intent(context, MainActivity.class);
 

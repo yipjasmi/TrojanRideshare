@@ -1,6 +1,5 @@
 package com.trojanrideshare.app.ui.payment;
 
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
@@ -13,6 +12,7 @@ import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.Lifecycle;
 
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -22,6 +22,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.Payment;
+import com.trojanrideshare.app.model.RidePaymentDetails;
 import com.trojanrideshare.app.service.payment.CostSplitter;
 import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.service.validation.PaymentValidator;
@@ -34,12 +35,9 @@ import java.util.List;
 import java.util.Map;
 
 public class RecordCostActivity extends AppCompatActivity {
-    private static final String EXTRA_RIDE_ID = "rideId";
-    private static final String STATE_CUSTOM_AMOUNTS = "customAmounts";
+    public static final String EXTRA_RIDE_ID = "rideId";
 
-    public static Intent intent(Context context, String rideId) {
-        return new Intent(context, RecordCostActivity.class).putExtra(EXTRA_RIDE_ID, rideId);
-    }
+    private static final String STATE_CUSTOM_AMOUNTS = "customAmounts";
 
     private static final class SplitRow {
         String name;
@@ -48,24 +46,24 @@ public class RecordCostActivity extends AppCompatActivity {
         TextInputEditText customInput;
     }
 
-    private final PaymentService paymentService = new PaymentService();
     private final List<SplitRow> rows = new ArrayList<>();
     private final TextWatcher previewWatcher = new TextWatcher() {
         @Override
-        public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+        public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
 
         @Override
-        public void onTextChanged(CharSequence s, int start, int before, int count) {}
+        public void onTextChanged(CharSequence text, int start, int before, int count) {}
 
         @Override
-        public void afterTextChanged(Editable s) {
+        public void afterTextChanged(Editable text) {
             refreshPreview();
         }
     };
 
+    private PaymentService paymentService;
     private String rideId;
-    private String uid;
-    private PaymentService.RideDetails details;
+    private String currentUserId;
+    private RidePaymentDetails details;
     private ArrayList<String> restoredCustomAmounts;
     private boolean saving;
 
@@ -90,6 +88,7 @@ public class RecordCostActivity extends AppCompatActivity {
         setContentView(R.layout.activity_record_cost);
         PaymentUi.setUpScreen(this);
 
+        paymentService = new PaymentService();
         stateContainer = findViewById(R.id.stateContainer);
         stateProgress = findViewById(R.id.stateProgress);
         stateMessage = findViewById(R.id.stateMessage);
@@ -114,16 +113,16 @@ public class RecordCostActivity extends AppCompatActivity {
             showBlocked(getString(R.string.payment_signed_out));
             return;
         }
-        uid = user.getUid();
+        currentUserId = user.getUid();
 
-        stateRetry.setOnClickListener(v -> load());
+        stateRetry.setOnClickListener(view -> load());
         costInput.addTextChangedListener(previewWatcher);
         splitModeGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (isChecked) {
                 onSplitModeChanged();
             }
         });
-        reviewButton.setOnClickListener(v -> review());
+        reviewButton.setOnClickListener(view -> review());
         load();
     }
 
@@ -140,38 +139,61 @@ public class RecordCostActivity extends AppCompatActivity {
 
     private void load() {
         showLoading();
-        paymentService.loadRideDetails(rideId, uid).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) {
-                showLoadError(PaymentUi.errorMessage(this, task.getException()));
-                return;
-            }
-            details = task.getResult();
-            String blocked = PaymentService.splitBlockedReason(details.ride, uid, details.shares);
-            if (blocked != null) {
-                showBlocked(blocked);
-                return;
-            }
-            bindForm();
-        });
+        paymentService.loadRideDetails(
+                rideId,
+                currentUserId,
+                new PaymentService.RideDetailsCallback() {
+                    @Override
+                    public void onSuccess(RidePaymentDetails loadedDetails) {
+                        details = loadedDetails;
+                        String blocked = PaymentService.splitBlockedReason(
+                                details.ride,
+                                currentUserId,
+                                details.shares
+                        );
+                        if (blocked != null) {
+                            showBlocked(blocked);
+                            return;
+                        }
+                        bindForm();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        showLoadError(message);
+                    }
+                }
+        );
     }
 
     private void bindForm() {
-        ((TextView) findViewById(R.id.rideTitle))
-                .setText(PaymentUi.rideTitle(this, details.ride.title));
-        ((TextView) findViewById(R.id.rideMeta)).setText(PaymentUi.rideMeta(this, details.ride));
+        ((TextView) findViewById(R.id.rideTitle)).setText(
+                PaymentUi.rideTitle(this, details.ride.title)
+        );
+        ((TextView) findViewById(R.id.rideMeta)).setText(
+                PaymentUi.rideMeta(this, details.ride)
+        );
 
         rows.clear();
         splitRows.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(this);
         for (String userId : details.participants) {
-            View view = LayoutInflater.from(this).inflate(R.layout.item_split_row, splitRows, false);
+            View view = inflater.inflate(R.layout.item_split_row, splitRows, false);
             SplitRow row = new SplitRow();
             row.name = PaymentUi.displayName(
-                    this, userId, uid, details.participants, details.names);
+                    this,
+                    userId,
+                    currentUserId,
+                    details.participants,
+                    details.names
+            );
             row.evenAmount = view.findViewById(R.id.splitEvenAmount);
             row.customLayout = view.findViewById(R.id.splitCustomLayout);
             row.customInput = view.findViewById(R.id.splitCustomInput);
             row.customLayout.setHint(R.string.payment_amount_label);
-            row.customInput.setContentDescription(getString(R.string.payment_amount_for, row.name));
+            row.customInput.setContentDescription(
+                    getString(R.string.payment_amount_for, row.name)
+            );
             row.customInput.addTextChangedListener(previewWatcher);
             ((TextView) view.findViewById(R.id.splitName)).setText(row.name);
             rows.add(row);
@@ -179,8 +201,8 @@ public class RecordCostActivity extends AppCompatActivity {
         }
 
         if (restoredCustomAmounts != null && restoredCustomAmounts.size() == rows.size()) {
-            for (int i = 0; i < rows.size(); i++) {
-                rows.get(i).customInput.setText(restoredCustomAmounts.get(i));
+            for (int index = 0; index < rows.size(); index++) {
+                rows.get(index).customInput.setText(restoredCustomAmounts.get(index));
             }
         } else {
             prefillExistingSplit();
@@ -191,21 +213,20 @@ public class RecordCostActivity extends AppCompatActivity {
         onSplitModeChanged();
     }
 
-    // Opening this screen for an existing split starts from what was saved.
     private void prefillExistingSplit() {
         if (details.ride.finalCost == null || details.shares.isEmpty()) {
             return;
         }
         long finalCents = Money.toCents(details.ride.finalCost);
-        Map<String, Long> saved = new HashMap<>();
+        Map<String, Long> savedCents = new HashMap<>();
         for (Payment share : details.shares) {
-            saved.put(share.userId, Money.toCents(share.amount));
+            savedCents.put(share.userId, Money.toCents(share.amount));
         }
         long[] savedShares = new long[rows.size()];
-        for (int i = 0; i < rows.size(); i++) {
-            Long cents = saved.get(details.participants.get(i));
-            savedShares[i] = cents == null ? 0 : cents;
-            rows.get(i).customInput.setText(Money.formatForInput(savedShares[i]));
+        for (int index = 0; index < rows.size(); index++) {
+            Long cents = savedCents.get(details.participants.get(index));
+            savedShares[index] = cents == null ? 0 : cents;
+            rows.get(index).customInput.setText(Money.formatForInput(savedShares[index]));
         }
         costInput.setText(Money.formatForInput(finalCents));
         if (!Arrays.equals(savedShares, CostSplitter.even(finalCents, rows.size()))) {
@@ -224,14 +245,13 @@ public class RecordCostActivity extends AppCompatActivity {
         }
         boolean custom = isCustom();
         PaymentValidator.Result cost = PaymentValidator.finalCost(text(costInput));
-        long[] even = cost.isValid() ? CostSplitter.even(cost.cents, rows.size()) : null;
-        for (int i = 0; i < rows.size(); i++) {
-            SplitRow row = rows.get(i);
-            PaymentUi.show(row.evenAmount, !custom);
-            PaymentUi.show(row.customLayout, custom);
-            // Start custom amounts from the even split so people adjust instead of retyping.
-            if (custom && even != null && text(row.customInput).isEmpty()) {
-                row.customInput.setText(Money.formatForInput(even[i]));
+        long[] evenShares = cost.isValid() ? CostSplitter.even(cost.cents, rows.size()) : null;
+        for (int index = 0; index < rows.size(); index++) {
+            SplitRow row = rows.get(index);
+            row.evenAmount.setVisibility(custom ? View.GONE : View.VISIBLE);
+            row.customLayout.setVisibility(custom ? View.VISIBLE : View.GONE);
+            if (custom && evenShares != null && text(row.customInput).isEmpty()) {
+                row.customInput.setText(Money.formatForInput(evenShares[index]));
             }
         }
         refreshPreview();
@@ -251,12 +271,15 @@ public class RecordCostActivity extends AppCompatActivity {
             showCustomSummary(cost);
             return;
         }
-        long[] even = cost.isValid() ? CostSplitter.even(cost.cents, rows.size()) : null;
-        for (int i = 0; i < rows.size(); i++) {
-            rows.get(i).evenAmount.setText(even == null ? "" : Money.format(even[i]));
+        long[] evenShares = cost.isValid() ? CostSplitter.even(cost.cents, rows.size()) : null;
+        for (int index = 0; index < rows.size(); index++) {
+            rows.get(index).evenAmount.setText(
+                    evenShares == null ? "" : Money.format(evenShares[index])
+            );
         }
-        splitSummary.setText(even == null
-                ? R.string.payment_enter_cost_hint : R.string.payment_even_note);
+        splitSummary.setText(evenShares == null
+                ? R.string.payment_enter_cost_hint
+                : R.string.payment_even_note);
     }
 
     private void showCustomSummary(PaymentValidator.Result cost) {
@@ -276,10 +299,16 @@ public class RecordCostActivity extends AppCompatActivity {
             splitSummary.setText(getString(R.string.payment_custom_exact, total));
         } else if (assigned < cost.cents) {
             splitSummary.setText(getString(
-                    R.string.payment_custom_left, total, Money.format(cost.cents - assigned)));
+                    R.string.payment_custom_left,
+                    total,
+                    Money.format(cost.cents - assigned)
+            ));
         } else {
             splitSummary.setText(getString(
-                    R.string.payment_custom_over, total, Money.format(assigned - cost.cents)));
+                    R.string.payment_custom_over,
+                    total,
+                    Money.format(assigned - cost.cents)
+            ));
         }
     }
 
@@ -290,7 +319,8 @@ public class RecordCostActivity extends AppCompatActivity {
             costInput.requestFocus();
             return;
         }
-        long[] shares = isCustom() ? readCustomShares(cost.cents)
+        long[] shares = isCustom()
+                ? readCustomShares(cost.cents)
                 : CostSplitter.even(cost.cents, rows.size());
         if (shares != null) {
             showReview(cost.cents, shares);
@@ -300,12 +330,12 @@ public class RecordCostActivity extends AppCompatActivity {
     private long[] readCustomShares(long finalCents) {
         long[] shares = new long[rows.size()];
         boolean valid = true;
-        for (int i = 0; i < rows.size(); i++) {
-            SplitRow row = rows.get(i);
+        for (int index = 0; index < rows.size(); index++) {
+            SplitRow row = rows.get(index);
             PaymentValidator.Result share = PaymentValidator.share(text(row.customInput));
             row.customLayout.setError(share.error);
             valid &= share.isValid();
-            shares[i] = share.cents;
+            shares[index] = share.cents;
         }
         if (!valid) {
             return null;
@@ -320,9 +350,12 @@ public class RecordCostActivity extends AppCompatActivity {
 
     private void showReview(long finalCents, long[] shares) {
         StringBuilder message = new StringBuilder();
-        for (int i = 0; i < rows.size(); i++) {
-            message.append(getString(R.string.payment_review_line,
-                    rows.get(i).name, Money.format(shares[i]))).append('\n');
+        for (int index = 0; index < rows.size(); index++) {
+            message.append(getString(
+                    R.string.payment_review_line,
+                    rows.get(index).name,
+                    Money.format(shares[index])
+            )).append('\n');
         }
         message.append('\n')
                 .append(getString(R.string.payment_review_total, Money.format(finalCents)))
@@ -331,8 +364,11 @@ public class RecordCostActivity extends AppCompatActivity {
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.payment_review_title)
                 .setMessage(message)
-                .setNegativeButton(R.string.payment_review_back, null)
-                .setPositiveButton(R.string.payment_review_save, (d, w) -> save(finalCents, shares))
+                .setNegativeButton(R.string.back, null)
+                .setPositiveButton(
+                        R.string.payment_review_save,
+                        (dialog, which) -> save(finalCents, shares)
+                )
                 .show();
     }
 
@@ -341,24 +377,42 @@ public class RecordCostActivity extends AppCompatActivity {
             return;
         }
         setSaving(true);
-        paymentService.saveSplit(rideId, uid, details.participants, shares, finalCents)
-                .addOnCompleteListener(this, task -> {
-                    setSaving(false);
-                    if (!task.isSuccessful()) {
-                        showFormError(PaymentUi.errorMessage(this, task.getException()));
-                        return;
+        paymentService.saveSplit(
+                rideId,
+                currentUserId,
+                details.participants,
+                shares,
+                finalCents,
+                new PaymentService.UpdateCallback() {
+                    @Override
+                    public void onSuccess() {
+                        setSaving(false);
+                        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
+                            showSavedRide();
+                        }
                     }
-                    // Editing came from that screen, so go back to it instead of stacking a copy.
-                    startActivity(RidePaymentActivity.intent(this, rideId).addFlags(
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-                    finish();
-                });
+
+                    @Override
+                    public void onError(String message) {
+                        setSaving(false);
+                        showFormError(message);
+                    }
+                }
+        );
     }
 
-    private void setSaving(boolean value) {
-        saving = value;
-        reviewButton.setEnabled(!value);
-        reviewButton.setText(value ? R.string.payment_saving : R.string.payment_review);
+    private void showSavedRide() {
+        Intent rideIntent = new Intent(this, RidePaymentActivity.class);
+        rideIntent.putExtra(RidePaymentActivity.EXTRA_RIDE_ID, rideId);
+        rideIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(rideIntent);
+        finish();
+    }
+
+    private void setSaving(boolean saving) {
+        this.saving = saving;
+        reviewButton.setEnabled(!saving);
+        reviewButton.setText(saving ? R.string.payment_saving : R.string.payment_review);
     }
 
     private void showFormError(String message) {
@@ -369,25 +423,25 @@ public class RecordCostActivity extends AppCompatActivity {
     private void showLoading() {
         formScroll.setVisibility(View.GONE);
         formFooter.setVisibility(View.GONE);
-        PaymentUi.show(stateContainer, true);
-        PaymentUi.show(stateProgress, true);
-        PaymentUi.show(stateMessage, false);
-        PaymentUi.show(stateRetry, false);
+        stateContainer.setVisibility(View.VISIBLE);
+        stateProgress.setVisibility(View.VISIBLE);
+        stateMessage.setVisibility(View.GONE);
+        stateRetry.setVisibility(View.GONE);
     }
 
     private void showLoadError(String message) {
         showBlocked(message);
-        PaymentUi.show(stateRetry, true);
+        stateRetry.setVisibility(View.VISIBLE);
     }
 
     private void showBlocked(String message) {
         formScroll.setVisibility(View.GONE);
         formFooter.setVisibility(View.GONE);
         stateMessage.setText(message);
-        PaymentUi.show(stateContainer, true);
-        PaymentUi.show(stateProgress, false);
-        PaymentUi.show(stateMessage, true);
-        PaymentUi.show(stateRetry, false);
+        stateContainer.setVisibility(View.VISIBLE);
+        stateProgress.setVisibility(View.GONE);
+        stateMessage.setVisibility(View.VISIBLE);
+        stateRetry.setVisibility(View.GONE);
     }
 
     private static String text(TextInputEditText input) {

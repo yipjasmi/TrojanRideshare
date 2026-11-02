@@ -4,7 +4,9 @@ import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentId;
 import com.google.firebase.firestore.Exclude;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class Ride {
     public static final String STATUS_ON_TIME = "onTime";
@@ -39,5 +41,15 @@ public class Ride {
     @Exclude
     public String getDerivedCapacityStatus() {
         return getAvailableSeats() == 0 ? CAPACITY_FULL : CAPACITY_OPEN;
+    }
+
+    @Exclude
+    public List<String> getAllParticipantIds() {
+        Set<String> allParticipantIds = new LinkedHashSet<>();
+        allParticipantIds.add(organizerId);
+        if (participantIds != null) {
+            allParticipantIds.addAll(participantIds);
+        }
+        return new ArrayList<>(allParticipantIds);
     }
 }

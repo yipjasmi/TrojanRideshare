@@ -1,5 +1,6 @@
 package com.trojanrideshare.app.payment;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -9,6 +10,7 @@ import android.os.SystemClock;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.Timestamp;
@@ -18,6 +20,8 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.FirebaseFirestoreSettings;
 import com.google.firebase.firestore.MemoryCacheSettings;
+import com.trojanrideshare.app.data.payment.PaymentDataAccess;
+import com.trojanrideshare.app.data.payment.PaymentRepository;
 import com.trojanrideshare.app.model.Ride;
 
 import java.io.FileInputStream;
@@ -83,7 +87,7 @@ final class PaymentEmulator {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(HOST, port), 1000);
             return true;
-        } catch (Exception e) {
+        } catch (Exception exception) {
             return false;
         }
     }
@@ -91,7 +95,9 @@ final class PaymentEmulator {
     // disableNetwork() stops listeners but not transactions, so a real offline test needs this.
     static void setAirplaneMode(boolean on) throws Exception {
         ParcelFileDescriptor output = InstrumentationRegistry.getInstrumentation().getUiAutomation()
-                .executeShellCommand("cmd connectivity airplane-mode " + (on ? "enable" : "disable"));
+                .executeShellCommand(
+                        "cmd connectivity airplane-mode " + (on ? "enable" : "disable")
+                );
         try (InputStream in = new FileInputStream(output.getFileDescriptor())) {
             while (in.read() != -1) {
                 // Wait for the command to finish.
@@ -104,11 +110,61 @@ final class PaymentEmulator {
         assertTrue("network did not change", reachable(FIRESTORE_PORT) != on);
     }
 
+    static Task<Void> saveSplit(
+            String rideId,
+            String organizerId,
+            List<String> participants,
+            long[] shares,
+            long finalCents
+    ) {
+        TaskCompletionSource<Void> done = new TaskCompletionSource<>();
+        new PaymentDataAccess().saveSplit(
+                rideId,
+                organizerId,
+                participants,
+                shares,
+                finalCents,
+                completing(done)
+        );
+        return done.getTask();
+    }
+
+    static Task<Void> markPaid(String rideId, String userId) {
+        TaskCompletionSource<Void> done = new TaskCompletionSource<>();
+        new PaymentDataAccess().markPaid(rideId, userId, completing(done));
+        return done.getTask();
+    }
+
+    static Task<Void> flag(String rideId, String riderId) {
+        TaskCompletionSource<Void> done = new TaskCompletionSource<>();
+        new PaymentDataAccess().flag(rideId, riderId, completing(done));
+        return done.getTask();
+    }
+
+    private static PaymentRepository.UpdateCallback completing(TaskCompletionSource<Void> done) {
+        return new PaymentRepository.UpdateCallback() {
+            @Override
+            public void onSuccess() {
+                done.setResult(null);
+            }
+
+            @Override
+            public void onFailure(PaymentRepository.Failure failure) {
+                done.setException(new ReportedFailure(failure));
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                done.setException(exception);
+            }
+        };
+    }
+
     static <T> T await(Task<T> task) throws Exception {
         return Tasks.await(task, 15, TimeUnit.SECONDS);
     }
 
-    static FirebaseFirestore db() {
+    static FirebaseFirestore firestore() {
         return FirebaseFirestore.getInstance();
     }
 
@@ -119,7 +175,7 @@ final class PaymentEmulator {
         emails.put(uid, email);
         Map<String, Object> profile = new HashMap<>();
         profile.put("fullName", name);
-        await(db().collection("users").document(uid).set(profile));
+        await(firestore().collection("users").document(uid).set(profile));
         return uid;
     }
 
@@ -133,7 +189,7 @@ final class PaymentEmulator {
 
     String seedRide(String status, List<String> riders) throws Exception {
         signIn(organizer);
-        DocumentReference ride = db().collection("rides").document();
+        DocumentReference ride = firestore().collection("rides").document();
         Map<String, Object> fields = new HashMap<>();
         fields.put("title", "LAX run before finals");
         fields.put("organizerId", organizer);
@@ -157,10 +213,10 @@ final class PaymentEmulator {
         adminUpdate(paymentId, "\"assignedAt\":" + timestamp(when), "\"assignedAt\"");
     }
 
-    // Stands in for a rider on another phone, so an open screen can be watched updating.
     void markPaidFromAnotherDevice(String paymentId) throws Exception {
         adminUpdate(paymentId,
-                "\"paid\":{\"booleanValue\":true},\"paidAt\":" + timestamp(System.currentTimeMillis()),
+                "\"paid\":{\"booleanValue\":true},\"paidAt\":"
+                        + timestamp(System.currentTimeMillis()),
                 "\"paid\",\"paidAt\"");
     }
 
@@ -172,8 +228,10 @@ final class PaymentEmulator {
 
     private void adminUpdate(String paymentId, String fields, String fieldPaths) throws Exception {
         String project = FirebaseApp.getInstance().getOptions().getProjectId();
-        String name = "projects/" + project + "/databases/(default)/documents/payments/" + paymentId;
-        String body = "{\"writes\":[{\"update\":{\"name\":\"" + name + "\",\"fields\":{" + fields + "}},"
+        String name = "projects/" + project
+                + "/databases/(default)/documents/payments/" + paymentId;
+        String body = "{\"writes\":[{\"update\":{\"name\":\"" + name
+                + "\",\"fields\":{" + fields + "}},"
                 + "\"updateMask\":{\"fieldPaths\":[" + fieldPaths + "]}}]}";
 
         URL url = new URL("http://" + HOST + ":" + FIRESTORE_PORT + "/v1/projects/" + project
@@ -190,15 +248,36 @@ final class PaymentEmulator {
                 connection.getResponseCode() == 200);
     }
 
+    static void assertFailure(PaymentRepository.Failure failure, Task<?> task) throws Exception {
+        try {
+            await(task);
+        } catch (ExecutionException exception) {
+            Throwable cause = exception.getCause();
+            assertTrue(cause.toString(), cause instanceof ReportedFailure);
+            assertEquals(failure, ((ReportedFailure) cause).failure);
+            return;
+        }
+        throw new AssertionError("The write was allowed");
+    }
+
     static void assertDenied(Task<?> task) throws Exception {
         try {
             await(task);
-        } catch (ExecutionException e) {
-            FirebaseFirestoreException failure = (FirebaseFirestoreException) e.getCause();
+        } catch (ExecutionException exception) {
+            FirebaseFirestoreException failure = (FirebaseFirestoreException) exception.getCause();
             assertTrue(failure.getCode().toString(),
                     failure.getCode() == FirebaseFirestoreException.Code.PERMISSION_DENIED);
             return;
         }
         throw new AssertionError("The write was allowed");
+    }
+
+    private static final class ReportedFailure extends Exception {
+        private final PaymentRepository.Failure failure;
+
+        private ReportedFailure(PaymentRepository.Failure failure) {
+            super(failure.name());
+            this.failure = failure;
+        }
     }
 }

@@ -1,15 +1,12 @@
-package com.trojanrideshare.app.payment;
+package com.trojanrideshare.app.util;
 
 import static org.junit.Assert.assertEquals;
-
-import com.trojanrideshare.app.util.Money;
 
 import org.junit.Test;
 
 public class MoneyTest {
-
     @Test
-    public void formatsDollarsAndCents() {
+    public void format_showsDollarsAndCents() {
         assertEquals("$0.00", Money.format(0));
         assertEquals("$0.05", Money.format(5));
         assertEquals("$12.50", Money.format(1250));
@@ -18,13 +15,12 @@ public class MoneyTest {
     }
 
     @Test
-    public void formatsForInputWithoutSymbols() {
+    public void formatForInput_leavesOutSymbols() {
         assertEquals("1234.05", Money.formatForInput(123405));
     }
 
-    // Firestore stores dollars as doubles, so this is what keeps shares adding up after a read.
     @Test
-    public void everyAmountSurvivesTheRoundTripThroughFirestoreDollars() {
+    public void toCents_survivesTheRoundTripThroughDollarsForEveryAmount() {
         for (long cents = 0; cents <= 9_999_999; cents++) {
             assertEquals(cents, Money.toCents(Money.toDollars(cents)));
         }

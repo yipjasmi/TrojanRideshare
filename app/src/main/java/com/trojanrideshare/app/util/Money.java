@@ -2,7 +2,6 @@ package com.trojanrideshare.app.util;
 
 import java.util.Locale;
 
-// Amounts are whole cents everywhere except the Firestore fields, which stay in dollars.
 public final class Money {
     private Money() {}
 
@@ -15,9 +14,15 @@ public final class Money {
     }
 
     public static String format(long cents) {
-        long abs = Math.abs(cents);
+        long absoluteCents = Math.abs(cents);
         String sign = cents < 0 ? "-" : "";
-        return String.format(Locale.US, "%s$%,d.%02d", sign, abs / 100, abs % 100);
+        return String.format(
+                Locale.US,
+                "%s$%,d.%02d",
+                sign,
+                absoluteCents / 100,
+                absoluteCents % 100
+        );
     }
 
     public static String formatForInput(long cents) {

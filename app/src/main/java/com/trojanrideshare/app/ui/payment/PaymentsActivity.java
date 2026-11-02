@@ -14,13 +14,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.R;
+import com.trojanrideshare.app.model.OrganizerRideSummary;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.util.Money;
 
-public class PaymentsActivity extends AppCompatActivity {
+import java.util.List;
 
-    // Each list owns its rows, error and retry, so one failed load can't blank the other.
+public class PaymentsActivity extends AppCompatActivity {
     private final class Section {
         final View root;
         final TextView error;
@@ -35,7 +36,7 @@ public class PaymentsActivity extends AppCompatActivity {
             retry = root.findViewById(R.id.sectionRetry);
             rows = root.findViewById(R.id.sectionRows);
             ((TextView) root.findViewById(R.id.sectionTitle)).setText(titleRes);
-            retry.setOnClickListener(v -> {
+            retry.setOnClickListener(view -> {
                 retry.setEnabled(false);
                 load.run();
             });
@@ -44,29 +45,28 @@ public class PaymentsActivity extends AppCompatActivity {
         void showRows() {
             loaded = true;
             empty = rows.getChildCount() == 0;
-            PaymentUi.show(error, false);
-            PaymentUi.show(retry, false);
-            PaymentUi.show(root, !empty);
+            error.setVisibility(View.GONE);
+            retry.setVisibility(View.GONE);
+            root.setVisibility(empty ? View.GONE : View.VISIBLE);
             refreshPageState();
         }
 
-        void showError(int messageRes, Exception failure) {
+        void showError(String message) {
             loaded = true;
             empty = false;
-            error.setText(getString(messageRes) + " "
-                    + PaymentUi.errorMessage(PaymentsActivity.this, failure));
+            error.setText(message);
             retry.setEnabled(true);
-            PaymentUi.show(error, true);
-            PaymentUi.show(retry, true);
-            PaymentUi.show(root, true);
+            error.setVisibility(View.VISIBLE);
+            retry.setVisibility(View.VISIBLE);
+            root.setVisibility(View.VISIBLE);
             refreshPageState();
         }
     }
 
-    private final PaymentService paymentService = new PaymentService();
-    private String uid;
-    private Section shares;
-    private Section rides;
+    private PaymentService paymentService;
+    private String currentUserId;
+    private Section sharesSection;
+    private Section ridesSection;
     private View stateContainer;
     private View stateProgress;
     private TextView stateMessage;
@@ -83,20 +83,29 @@ public class PaymentsActivity extends AppCompatActivity {
             finish();
             return;
         }
-        uid = user.getUid();
+        currentUserId = user.getUid();
 
+        paymentService = new PaymentService();
         stateContainer = findViewById(R.id.stateContainer);
         stateProgress = findViewById(R.id.stateProgress);
         stateMessage = findViewById(R.id.stateMessage);
         stateMessage.setText(R.string.payment_empty);
-        shares = new Section(R.id.sharesSection, R.string.payment_section_shares, this::loadShares);
-        rides = new Section(R.id.ridesSection, R.string.payment_section_rides, this::loadRides);
+        sharesSection = new Section(
+                R.id.sharesSection,
+                R.string.payment_section_shares,
+                this::loadShares
+        );
+        ridesSection = new Section(
+                R.id.ridesSection,
+                R.string.payment_section_rides,
+                this::loadRides
+        );
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        if (uid != null) {
+        if (currentUserId != null) {
             refreshPageState();
             loadShares();
             loadRides();
@@ -104,71 +113,115 @@ public class PaymentsActivity extends AppCompatActivity {
     }
 
     private void refreshPageState() {
-        boolean allLoaded = shares.loaded && rides.loaded;
-        boolean allEmpty = allLoaded && shares.empty && rides.empty;
-        PaymentUi.show(stateContainer, !allLoaded || allEmpty);
-        PaymentUi.show(stateProgress, !allLoaded);
-        PaymentUi.show(stateMessage, allEmpty);
+        boolean allLoaded = sharesSection.loaded && ridesSection.loaded;
+        boolean allEmpty = allLoaded && sharesSection.empty && ridesSection.empty;
+        stateContainer.setVisibility(!allLoaded || allEmpty ? View.VISIBLE : View.GONE);
+        stateProgress.setVisibility(allLoaded ? View.GONE : View.VISIBLE);
+        stateMessage.setVisibility(allEmpty ? View.VISIBLE : View.GONE);
     }
 
     private void loadShares() {
-        paymentService.loadMyShares(uid).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) {
-                shares.showError(R.string.payment_shares_load_failed, task.getException());
-                return;
+        paymentService.loadMyShares(currentUserId, new PaymentService.SharesCallback() {
+            @Override
+            public void onSuccess(List<Payment> shares) {
+                renderShares(shares);
             }
-            shares.rows.removeAllViews();
-            for (Payment share : task.getResult()) {
-                addRow(shares.rows,
-                        PaymentUi.rideTitle(this, share.rideTitle),
-                        PaymentUi.shareStatus(this, share),
-                        Money.format(Money.toCents(share.amount)),
-                        RidePaymentActivity.intent(this, share.rideId));
+
+            @Override
+            public void onError(String message) {
+                sharesSection.showError(message);
             }
-            shares.showRows();
         });
+    }
+
+    private void renderShares(List<Payment> shares) {
+        sharesSection.rows.removeAllViews();
+        for (Payment share : shares) {
+            Intent rideIntent = new Intent(this, RidePaymentActivity.class);
+            rideIntent.putExtra(RidePaymentActivity.EXTRA_RIDE_ID, share.rideId);
+            addRow(
+                    sharesSection.rows,
+                    PaymentUi.rideTitle(this, share.rideTitle),
+                    PaymentUi.shareStatus(this, share),
+                    Money.format(Money.toCents(share.amount)),
+                    rideIntent
+            );
+        }
+        sharesSection.showRows();
     }
 
     private void loadRides() {
-        paymentService.loadMyRides(uid).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) {
-                rides.showError(R.string.payment_rides_load_failed, task.getException());
-                return;
+        paymentService.loadMyRides(currentUserId, new PaymentService.RideSummariesCallback() {
+            @Override
+            public void onSuccess(List<OrganizerRideSummary> summaries) {
+                renderRides(summaries);
             }
-            rides.rows.removeAllViews();
-            for (PaymentService.RideCollection collection : task.getResult()) {
-                String title = PaymentUi.rideTitle(this, collection.ride.title);
-                if (collection.needsFinalCost) {
-                    addRow(rides.rows, title, getString(R.string.payment_needs_cost), "",
-                            RecordCostActivity.intent(this, collection.ride.id));
-                } else {
-                    addRow(rides.rows, title, collectionStatus(collection),
-                            collection.outstandingCents > 0
-                                    ? Money.format(collection.outstandingCents) : "",
-                            RidePaymentActivity.intent(this, collection.ride.id));
-                }
+
+            @Override
+            public void onError(String message) {
+                ridesSection.showError(message);
             }
-            rides.showRows();
         });
     }
 
-    private void addRow(LinearLayout rows, String title, String detail, String amount, Intent target) {
+    private void renderRides(List<OrganizerRideSummary> summaries) {
+        ridesSection.rows.removeAllViews();
+        for (OrganizerRideSummary summary : summaries) {
+            String title = PaymentUi.rideTitle(this, summary.ride.title);
+            if (summary.needsFinalCost) {
+                Intent costIntent = new Intent(this, RecordCostActivity.class);
+                costIntent.putExtra(RecordCostActivity.EXTRA_RIDE_ID, summary.ride.id);
+                addRow(
+                        ridesSection.rows,
+                        title,
+                        getString(R.string.payment_needs_cost),
+                        "",
+                        costIntent
+                );
+            } else {
+                Intent rideIntent = new Intent(this, RidePaymentActivity.class);
+                rideIntent.putExtra(RidePaymentActivity.EXTRA_RIDE_ID, summary.ride.id);
+                addRow(
+                        ridesSection.rows,
+                        title,
+                        summaryStatus(summary),
+                        summary.outstandingCents > 0
+                                ? Money.format(summary.outstandingCents)
+                                : "",
+                        rideIntent
+                );
+            }
+        }
+        ridesSection.showRows();
+    }
+
+    private void addRow(
+            LinearLayout rows,
+            String title,
+            String detail,
+            String amount,
+            Intent target
+    ) {
         View row = LayoutInflater.from(this).inflate(R.layout.item_payment_row, rows, false);
         ((TextView) row.findViewById(R.id.rowTitle)).setText(title);
         ((TextView) row.findViewById(R.id.rowDetail)).setText(detail);
         ((TextView) row.findViewById(R.id.rowAmount)).setText(amount);
-        row.setOnClickListener(v -> startActivity(target));
+        row.setOnClickListener(view -> startActivity(target));
         rows.addView(row);
     }
 
-    private String collectionStatus(PaymentService.RideCollection collection) {
-        if (collection.riders == 0) {
+    private String summaryStatus(OrganizerRideSummary summary) {
+        if (summary.riders == 0) {
             return getString(R.string.payment_no_riders);
         }
-        if (collection.outstandingCents == 0) {
+        if (summary.outstandingCents == 0) {
             return getString(R.string.payment_all_paid);
         }
-        return getResources().getQuantityString(R.plurals.payment_riders_paid, collection.riders,
-                collection.ridersPaid, collection.riders);
+        return getResources().getQuantityString(
+                R.plurals.payment_riders_paid,
+                summary.riders,
+                summary.ridersPaid,
+                summary.riders
+        );
     }
 }

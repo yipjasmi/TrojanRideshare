@@ -1,6 +1,5 @@
 package com.trojanrideshare.app.ui.payment;
 
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -11,31 +10,27 @@ import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.Lifecycle;
 
-import com.google.android.gms.tasks.Task;
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.Payment;
-import com.trojanrideshare.app.model.Ride;
+import com.trojanrideshare.app.model.RidePaymentDetails;
 import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.util.Money;
 
 import java.util.List;
 
 public class RidePaymentActivity extends AppCompatActivity {
-    private static final String EXTRA_RIDE_ID = "rideId";
+    public static final String EXTRA_RIDE_ID = "rideId";
 
-    public static Intent intent(Context context, String rideId) {
-        return new Intent(context, RidePaymentActivity.class).putExtra(EXTRA_RIDE_ID, rideId);
-    }
-
-    private final PaymentService paymentService = new PaymentService();
+    private PaymentService paymentService;
     private String rideId;
-    private String uid;
-    private PaymentService.RideDetails details;
+    private String currentUserId;
+    private RidePaymentDetails details;
 
     private View stateContainer;
     private View stateProgress;
@@ -59,6 +54,7 @@ public class RidePaymentActivity extends AppCompatActivity {
         setContentView(R.layout.activity_ride_payment);
         PaymentUi.setUpScreen(this);
 
+        paymentService = new PaymentService();
         stateContainer = findViewById(R.id.stateContainer);
         stateProgress = findViewById(R.id.stateProgress);
         stateMessage = findViewById(R.id.stateMessage);
@@ -74,20 +70,20 @@ public class RidePaymentActivity extends AppCompatActivity {
         sharesList = findViewById(R.id.sharesList);
         footnote = findViewById(R.id.footnote);
 
-        stateRetry.setOnClickListener(v -> load());
+        stateRetry.setOnClickListener(view -> load());
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         rideId = getIntent().getStringExtra(EXTRA_RIDE_ID);
         if (user == null || rideId == null) {
             showMessage(getString(R.string.payment_signed_out), false);
             return;
         }
-        uid = user.getUid();
+        currentUserId = user.getUid();
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        if (uid != null) {
+        if (currentUserId != null) {
             load();
         }
     }
@@ -96,33 +92,62 @@ public class RidePaymentActivity extends AppCompatActivity {
         if (details == null) {
             showLoading();
         }
-        paymentService.loadRideDetails(rideId, uid).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) {
-                showMessage(PaymentUi.errorMessage(this, task.getException()), true);
-                return;
-            }
-            details = task.getResult();
-            Ride ride = details.ride;
-            if (!details.participants.contains(uid)) {
-                showMessage(getString(R.string.payment_not_participant), false);
-                return;
-            }
-            ((TextView) findViewById(R.id.rideTitle)).setText(PaymentUi.rideTitle(this, ride.title));
-            ((TextView) findViewById(R.id.rideMeta)).setText(PaymentUi.rideMeta(this, ride));
-            paymentService.watchShares(this, ride, uid, (shares, error) -> {
-                if (error != null) {
-                    showMessage(PaymentUi.errorMessage(this, error), true);
-                } else if (isOrganizer()) {
-                    renderOrganizer(shares);
-                } else {
-                    renderRider(shares.isEmpty() ? null : shares.get(0));
+        paymentService.loadRideDetails(
+                rideId,
+                currentUserId,
+                new PaymentService.RideDetailsCallback() {
+                    @Override
+                    public void onSuccess(RidePaymentDetails loadedDetails) {
+                        // Firestore crashes binding a listener to an activity that is gone.
+                        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
+                            showRide(loadedDetails);
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        showMessage(message, true);
+                    }
                 }
-            });
-        });
+        );
+    }
+
+    private void showRide(RidePaymentDetails loadedDetails) {
+        details = loadedDetails;
+        if (!details.participants.contains(currentUserId)) {
+            showMessage(getString(R.string.payment_not_participant), false);
+            return;
+        }
+        ((TextView) findViewById(R.id.rideTitle)).setText(
+                PaymentUi.rideTitle(this, details.ride.title)
+        );
+        ((TextView) findViewById(R.id.rideMeta)).setText(
+                PaymentUi.rideMeta(this, details.ride)
+        );
+        paymentService.watchShares(
+                this,
+                details.ride,
+                currentUserId,
+                new PaymentService.SharesCallback() {
+                    @Override
+                    public void onSuccess(List<Payment> shares) {
+                        if (isOrganizer()) {
+                            renderOrganizer(shares);
+                        } else {
+                            renderRider(shares.isEmpty() ? null : shares.get(0));
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        showMessage(message, true);
+                    }
+                }
+        );
     }
 
     private boolean isOrganizer() {
-        return uid.equals(details.ride.organizerId);
+        return currentUserId.equals(details.ride.organizerId);
     }
 
     private String organizerName() {
@@ -133,9 +158,9 @@ public class RidePaymentActivity extends AppCompatActivity {
     private void renderRider(Payment share) {
         showDetail();
         sharesList.removeAllViews();
-        PaymentUi.show(sharesTitle, false);
-        PaymentUi.show(primaryAction, false);
-        PaymentUi.show(statusText, false);
+        sharesTitle.setVisibility(View.GONE);
+        primaryAction.setVisibility(View.GONE);
+        statusText.setVisibility(View.GONE);
 
         if (share == null) {
             showAmountHeader("", getString(R.string.payment_no_cost_yet), "");
@@ -144,9 +169,16 @@ public class RidePaymentActivity extends AppCompatActivity {
         }
 
         long cents = Money.toCents(share.amount);
-        showAmountHeader(getString(R.string.payment_your_share), Money.format(cents),
-                details.ride.finalCost == null ? "" : getString(R.string.payment_of_final_cost,
-                        Money.format(Money.toCents(details.ride.finalCost))));
+        showAmountHeader(
+                getString(R.string.payment_your_share),
+                Money.format(cents),
+                details.ride.finalCost == null
+                        ? ""
+                        : getString(
+                                R.string.payment_of_final_cost,
+                                Money.format(Money.toCents(details.ride.finalCost))
+                        )
+        );
         showStatus(PaymentUi.shareStatus(this, share), share.flagged);
 
         if (share.paid) {
@@ -155,20 +187,23 @@ public class RidePaymentActivity extends AppCompatActivity {
         }
         footnote.setText(getString(R.string.payment_reimburse, organizerName()));
         primaryAction.setText(R.string.payment_mark_paid);
-        primaryAction.setOnClickListener(v -> confirmMarkPaid(cents));
-        PaymentUi.show(primaryAction, true);
+        primaryAction.setOnClickListener(view -> confirmMarkPaid(cents));
+        primaryAction.setVisibility(View.VISIBLE);
     }
 
     private void renderOrganizer(List<Payment> shares) {
         showDetail();
         footnote.setText(R.string.payment_outside_app);
-        PaymentUi.show(statusText, false);
+        statusText.setVisibility(View.GONE);
         sharesList.removeAllViews();
 
         if (shares.isEmpty()) {
-            showAmountHeader("", getString(R.string.payment_no_cost_yet),
-                    getString(R.string.payment_no_cost_yet_organizer));
-            PaymentUi.show(sharesTitle, false);
+            showAmountHeader(
+                    "",
+                    getString(R.string.payment_no_cost_yet),
+                    getString(R.string.payment_no_cost_yet_organizer)
+            );
+            sharesTitle.setVisibility(View.GONE);
             showPrimaryAction(R.string.payment_record_cost);
             return;
         }
@@ -188,11 +223,14 @@ public class RidePaymentActivity extends AppCompatActivity {
             addShareRow(share, cents);
         }
 
-        showAmountHeader(getString(R.string.payment_outstanding), Money.format(outstanding),
-                getString(R.string.payment_of_final_cost, Money.format(finalCents)));
-        PaymentUi.show(sharesTitle, true);
-        if (PaymentService.hasRiderMarkedPaid(shares)) {
-            PaymentUi.show(primaryAction, false);
+        showAmountHeader(
+                getString(R.string.payment_outstanding),
+                Money.format(outstanding),
+                getString(R.string.payment_of_final_cost, Money.format(finalCents))
+        );
+        sharesTitle.setVisibility(View.VISIBLE);
+        if (Payment.hasRiderMarkedPaid(shares)) {
+            primaryAction.setVisibility(View.GONE);
             footnote.setText(getString(R.string.payment_locked_note) + " "
                     + getString(R.string.payment_outside_app));
         } else {
@@ -202,9 +240,12 @@ public class RidePaymentActivity extends AppCompatActivity {
 
     private void showPrimaryAction(int labelRes) {
         primaryAction.setText(labelRes);
-        primaryAction.setOnClickListener(
-                v -> startActivity(RecordCostActivity.intent(this, rideId)));
-        PaymentUi.show(primaryAction, true);
+        primaryAction.setOnClickListener(view -> {
+            Intent costIntent = new Intent(this, RecordCostActivity.class);
+            costIntent.putExtra(RecordCostActivity.EXTRA_RIDE_ID, rideId);
+            startActivity(costIntent);
+        });
+        primaryAction.setVisibility(View.VISIBLE);
     }
 
     private static Payment shareOf(List<Payment> shares, String userId) {
@@ -219,7 +260,12 @@ public class RidePaymentActivity extends AppCompatActivity {
     private void addShareRow(Payment share, long cents) {
         View row = LayoutInflater.from(this).inflate(R.layout.item_share_row, sharesList, false);
         String name = PaymentUi.displayName(
-                this, share.userId, uid, details.participants, details.names);
+                this,
+                share.userId,
+                currentUserId,
+                details.participants,
+                details.names
+        );
         ((TextView) row.findViewById(R.id.shareName)).setText(name);
         ((TextView) row.findViewById(R.id.shareAmount)).setText(Money.format(cents));
         TextView status = row.findViewById(R.id.shareStatus);
@@ -227,11 +273,11 @@ public class RidePaymentActivity extends AppCompatActivity {
         if (share.flagged) {
             status.setTextColor(colorError());
         }
-        if (!share.flagged && PaymentService.isOverdue(share, System.currentTimeMillis())) {
-            Button flag = row.findViewById(R.id.shareFlag);
-            flag.setContentDescription(getString(R.string.payment_flag_name, name));
-            flag.setOnClickListener(v -> confirmFlag(share, name, cents));
-            PaymentUi.show(flag, true);
+        if (!share.flagged && share.isOverdue(System.currentTimeMillis())) {
+            Button flagButton = row.findViewById(R.id.shareFlag);
+            flagButton.setContentDescription(getString(R.string.payment_flag_name, name));
+            flagButton.setOnClickListener(view -> confirmFlag(share, name, cents));
+            flagButton.setVisibility(View.VISIBLE);
         }
         sharesList.addView(row);
     }
@@ -241,48 +287,77 @@ public class RidePaymentActivity extends AppCompatActivity {
                 .setTitle(getString(R.string.payment_mark_paid_title, Money.format(cents)))
                 .setMessage(getString(R.string.payment_mark_paid_body, organizerName()))
                 .setNegativeButton(R.string.payment_mark_paid_cancel, null)
-                .setPositiveButton(R.string.payment_mark_paid, (d, w) ->
-                        runAction(paymentService.markPaid(rideId, uid)))
+                .setPositiveButton(
+                        R.string.payment_mark_paid,
+                        (dialog, which) -> markPaid()
+                )
                 .show();
     }
 
     private void confirmFlag(Payment share, String name, long cents) {
         new MaterialAlertDialogBuilder(this)
                 .setTitle(getString(R.string.payment_flag_title, name))
-                .setMessage(getString(R.string.payment_flag_body, Money.format(cents),
-                        PaymentService.APPROVAL_PERIOD_DAYS))
-                .setNegativeButton(R.string.payment_flag_cancel, null)
-                .setPositiveButton(getString(R.string.payment_flag_name, name), (d, w) ->
-                        runAction(paymentService.flag(rideId, share.userId)))
+                .setMessage(getString(
+                        R.string.payment_flag_body,
+                        Money.format(cents),
+                        Payment.APPROVAL_PERIOD_DAYS
+                ))
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(
+                        getString(R.string.payment_flag_name, name),
+                        (dialog, which) -> flagRider(share.userId)
+                )
                 .show();
     }
 
-    // The share listener redraws the screen on success, so only failure needs handling here.
-    private void runAction(Task<Void> action) {
-        PaymentUi.show(actionError, false);
+    private void markPaid() {
+        startAction();
+        paymentService.markPaid(rideId, currentUserId, actionCallback());
+    }
+
+    private void flagRider(String riderId) {
+        startAction();
+        paymentService.flag(rideId, riderId, actionCallback());
+    }
+
+    private void startAction() {
+        actionError.setVisibility(View.GONE);
         primaryAction.setEnabled(false);
-        action.addOnCompleteListener(this, task -> {
-            primaryAction.setEnabled(true);
-            if (!task.isSuccessful()) {
-                actionError.setText(PaymentUi.errorMessage(this, task.getException()));
-                PaymentUi.show(actionError, true);
+    }
+
+    private PaymentService.UpdateCallback actionCallback() {
+        return new PaymentService.UpdateCallback() {
+            @Override
+            public void onSuccess() {
+                primaryAction.setEnabled(true);
             }
-        });
+
+            @Override
+            public void onError(String message) {
+                primaryAction.setEnabled(true);
+                actionError.setText(message);
+                actionError.setVisibility(View.VISIBLE);
+            }
+        };
     }
 
     private void showAmountHeader(String label, String value, String detail) {
         amountLabel.setText(label);
         amountValue.setText(value);
         amountDetail.setText(detail);
-        PaymentUi.show(amountLabel, !label.isEmpty());
-        PaymentUi.show(amountDetail, !detail.isEmpty());
+        amountLabel.setVisibility(label.isEmpty() ? View.GONE : View.VISIBLE);
+        amountDetail.setVisibility(detail.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private void showStatus(String status, boolean alert) {
         statusText.setText(status);
-        statusText.setTextColor(alert ? colorError()
-                : MaterialColors.getColor(statusText, com.google.android.material.R.attr.colorOnSurface));
-        PaymentUi.show(statusText, true);
+        statusText.setTextColor(alert
+                ? colorError()
+                : MaterialColors.getColor(
+                        statusText,
+                        com.google.android.material.R.attr.colorOnSurface
+                ));
+        statusText.setVisibility(View.VISIBLE);
     }
 
     private int colorError() {
@@ -290,24 +365,24 @@ public class RidePaymentActivity extends AppCompatActivity {
     }
 
     private void showDetail() {
-        PaymentUi.show(stateContainer, false);
-        PaymentUi.show(detailScroll, true);
+        stateContainer.setVisibility(View.GONE);
+        detailScroll.setVisibility(View.VISIBLE);
     }
 
     private void showLoading() {
-        PaymentUi.show(detailScroll, false);
-        PaymentUi.show(stateContainer, true);
-        PaymentUi.show(stateProgress, true);
-        PaymentUi.show(stateMessage, false);
-        PaymentUi.show(stateRetry, false);
+        detailScroll.setVisibility(View.GONE);
+        stateContainer.setVisibility(View.VISIBLE);
+        stateProgress.setVisibility(View.VISIBLE);
+        stateMessage.setVisibility(View.GONE);
+        stateRetry.setVisibility(View.GONE);
     }
 
     private void showMessage(String message, boolean canRetry) {
-        PaymentUi.show(detailScroll, false);
+        detailScroll.setVisibility(View.GONE);
         stateMessage.setText(message);
-        PaymentUi.show(stateContainer, true);
-        PaymentUi.show(stateProgress, false);
-        PaymentUi.show(stateMessage, true);
-        PaymentUi.show(stateRetry, canRetry);
+        stateContainer.setVisibility(View.VISIBLE);
+        stateProgress.setVisibility(View.GONE);
+        stateMessage.setVisibility(View.VISIBLE);
+        stateRetry.setVisibility(canRetry ? View.VISIBLE : View.GONE);
     }
 }

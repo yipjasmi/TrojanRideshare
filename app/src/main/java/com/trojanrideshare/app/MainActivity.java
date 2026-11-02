@@ -82,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
             startActivity(requestsIntent);
         });
         findViewById(R.id.paymentsButton).setOnClickListener(
-                v -> startActivity(new Intent(this, PaymentsActivity.class)));
+                v -> startActivity(new Intent(MainActivity.this, PaymentsActivity.class))
+        );
     }
 }
