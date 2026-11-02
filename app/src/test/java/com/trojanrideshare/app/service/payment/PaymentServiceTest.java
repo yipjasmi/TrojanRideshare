@@ -143,6 +143,18 @@ public class PaymentServiceTest {
     }
 
     @Test
+    public void summarize_handlesAShareWithNoUserId() {
+        Ride ride = ride("ride-1", ORGANIZER_ID, Ride.STATUS_COMPLETED, RIDER_ID);
+        Payment share = share("ride-1", null, 5, false);
+
+        OrganizerRideSummary summary = PaymentService
+                .summarize(Collections.singletonList(ride), Collections.singletonList(share))
+                .get(0);
+
+        assertEquals(500, summary.outstandingCents);
+    }
+
+    @Test
     public void loadMyShares_leavesOutOrganizedRidesAndListsUnpaidFirst() {
         FakeRepository repository = new FakeRepository();
         Payment organized = share("organized", RIDER_ID, 5, true);

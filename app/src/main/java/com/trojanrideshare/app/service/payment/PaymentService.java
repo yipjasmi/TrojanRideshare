@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class PaymentService {
     public interface SharesCallback {
@@ -237,7 +238,7 @@ public class PaymentService {
             int ridersPaid = 0;
             long outstandingCents = 0;
             for (Payment share : sharesByRide.getOrDefault(ride.id, Collections.emptyList())) {
-                if (share.userId.equals(ride.organizerId)) {
+                if (Objects.equals(share.userId, ride.organizerId)) {
                     continue;
                 }
                 riders++;
