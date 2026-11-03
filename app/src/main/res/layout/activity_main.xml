@@ -36,6 +36,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/main_manage_requests_action" />
+
+        <Button
+            android:id="@+id/paymentsButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/payment_title" />
     </LinearLayout>
 
     <include layout="@layout/layout_bottom_nav" />

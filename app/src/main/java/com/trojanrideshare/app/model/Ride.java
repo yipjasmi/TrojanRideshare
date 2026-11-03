@@ -4,7 +4,9 @@ import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentId;
 import com.google.firebase.firestore.Exclude;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class Ride {
     public static final String STATUS_ON_TIME = "onTime";
@@ -39,5 +41,23 @@ public class Ride {
     @Exclude
     public String getDerivedCapacityStatus() {
         return getAvailableSeats() == 0 ? CAPACITY_FULL : CAPACITY_OPEN;
+    }
+
+    @Exclude
+    public List<String> getAllParticipantIds() {
+        List<String> candidateIds = new ArrayList<>();
+        candidateIds.add(organizerId);
+        if (participantIds != null) {
+            candidateIds.addAll(participantIds);
+        }
+
+        // Any student can write participantIds, and Firestore throws on a bad document id.
+        Set<String> allParticipantIds = new LinkedHashSet<>();
+        for (String candidateId : candidateIds) {
+            if (candidateId != null && !candidateId.isEmpty() && !candidateId.contains("/")) {
+                allParticipantIds.add(candidateId);
+            }
+        }
+        return new ArrayList<>(allParticipantIds);
     }
 }
