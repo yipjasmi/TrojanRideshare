@@ -159,25 +159,15 @@ public class SearchActivity extends AppCompatActivity {
 
     private void initializePlaces() {
         if (!BuildConfig.PLACES_API_KEY.trim().isEmpty() && !Places.isInitialized()) {
-            Places.initialize(getApplicationContext(), BuildConfig.PLACES_API_KEY);
+            Places.initializeWithNewPlacesApiEnabled(getApplicationContext(), BuildConfig.PLACES_API_KEY);
         }
     }
 
     private void launchPlacePicker(ActivityResultLauncher<Intent> launcher) {
-        if (!Places.isInitialized()) {
-            Toast.makeText(this, R.string.search_places_unavailable, Toast.LENGTH_LONG).show();
-            return;
-        }
-        List<Place.Field> fields = Arrays.asList(
-                Place.Field.ID,
-                Place.Field.FORMATTED_ADDRESS,
-                Place.Field.LAT_LNG
-        );
-        Intent intent = new Autocomplete.IntentBuilder(
-                AutocompleteActivityMode.OVERLAY,
-                fields
-        ).setCountries(Collections.singletonList("US")).build(this);
-        launcher.launch(intent);
+        com.trojanrideshare.app.util.PlacesLocationPicker.show(this, selected -> {
+            if (launcher == originPicker) { preferredOrigin = selected; originInput.setText(selected.address); }
+            else { preferredDestination = selected; destinationInput.setText(selected.address); }
+        });
     }
 
     private void handlePlaceResult(int resultCode, Intent data, boolean isOrigin) {
