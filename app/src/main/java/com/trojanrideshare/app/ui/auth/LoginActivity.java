@@ -22,6 +22,7 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
 
@@ -41,7 +42,7 @@ public class LoginActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         if (auth.getCurrentUser() != null) {
-            goToMain();
+            checkUserAndNavigate();
         }
     }
 
@@ -87,19 +88,34 @@ public class LoginActivity extends AppCompatActivity {
                 Toast.makeText(this, "Firebase sign-in failed", Toast.LENGTH_LONG).show();
                 return;
             }
-            FirebaseUser user = auth.getCurrentUser();
-            String email = user != null ? user.getEmail() : null;
-            if (email == null || !email.toLowerCase().endsWith("@usc.edu")) {
-                auth.signOut();
-                Toast.makeText(this, "Please use your @usc.edu account", Toast.LENGTH_LONG).show();
-                return;
-            }
-            goToMain();
+            checkUserAndNavigate();
         });
     }
 
-    private void goToMain() {
-        startActivity(new Intent(this, MainActivity.class));
-        finish();
+    private void checkUserAndNavigate() {
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null) return;
+        String email = user.getEmail();
+        if (email == null || !email.toLowerCase().endsWith("@usc.edu")) {
+            auth.signOut();
+            Toast.makeText(this, "Please use your @usc.edu account", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        FirebaseFirestore.getInstance().collection("users").document(user.getUid())
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        startActivity(new Intent(this, MainActivity.class));
+                        finish();
+                    } else {
+                        startActivity(new Intent(this, ProfileSetupActivity.class));
+                        finish();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    startActivity(new Intent(this, MainActivity.class));
+                    finish();
+                });
     }
 }

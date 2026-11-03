@@ -31,6 +31,8 @@ import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.Timestamp;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.BuildConfig;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.PlaceInfo;
@@ -39,6 +41,7 @@ import com.trojanrideshare.app.model.SearchCriteria;
 import com.trojanrideshare.app.model.SortOption;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.service.search.SearchService;
+import com.trojanrideshare.app.util.BottomNavHelper;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -89,12 +92,24 @@ public class SearchActivity extends AppCompatActivity {
             result -> handlePlaceResult(result.getResultCode(), result.getData(), false)
     );
 
+    private String getCurrentUserId() {
+        String userId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
+        if (userId == null || userId.isEmpty()) {
+            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser != null) {
+                userId = currentUser.getUid();
+            }
+        }
+        return userId;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_search);
 
         bindViews();
+        BottomNavHelper.setupBottomNav(this, R.id.nav_find);
         searchService = new SearchService();
         joinRequestService = new JoinRequestService();
         initializePlaces();
@@ -306,7 +321,7 @@ public class SearchActivity extends AppCompatActivity {
 
         searchService.search(
                 criteria,
-                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID),
+                getCurrentUserId(),
                 new SearchService.Callback() {
                     @Override
                     public void onSuccess(List<Ride> rides) {
@@ -465,7 +480,7 @@ public class SearchActivity extends AppCompatActivity {
         requestButton.setText(R.string.join_request_sending);
         joinRequestService.submit(
                 ride,
-                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID),
+                getCurrentUserId(),
                 message,
                 new JoinRequestService.Callback() {
                     @Override
@@ -502,7 +517,7 @@ public class SearchActivity extends AppCompatActivity {
 
     private void loadPendingJoinRequests() {
         joinRequestService.loadPendingRideIds(
-                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID),
+                getCurrentUserId(),
                 new JoinRequestService.PendingRequestsCallback() {
                     @Override
                     public void onSuccess(Set<String> rideIds) {
@@ -557,7 +572,7 @@ public class SearchActivity extends AppCompatActivity {
         requestButton.setText(R.string.join_request_cancelling);
         joinRequestService.cancel(
                 ride.id,
-                getIntent().getStringExtra(EXTRA_CURRENT_USER_ID),
+                getCurrentUserId(),
                 new JoinRequestService.CancelCallback() {
                     @Override
                     public void onSuccess() {

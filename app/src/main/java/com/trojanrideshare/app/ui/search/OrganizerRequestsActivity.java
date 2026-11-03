@@ -12,9 +12,12 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
+import com.trojanrideshare.app.util.BottomNavHelper;
 
 import java.util.List;
 
@@ -27,6 +30,17 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     private LinearLayout requestsContainer;
     private String organizerId;
 
+    private String getOrganizerId() {
+        String id = getIntent().getStringExtra(EXTRA_ORGANIZER_ID);
+        if (id == null || id.isEmpty()) {
+            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser != null) {
+                id = currentUser.getUid();
+            }
+        }
+        return id;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -36,9 +50,10 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         loadingIndicator = findViewById(R.id.organizerRequestsLoading);
         statusMessage = findViewById(R.id.organizerRequestsStatus);
         requestsContainer = findViewById(R.id.organizerRequestsContainer);
-        organizerId = getIntent().getStringExtra(EXTRA_ORGANIZER_ID);
+        organizerId = getOrganizerId();
 
         findViewById(R.id.organizerRequestsBack).setOnClickListener(view -> finish());
+        BottomNavHelper.setupBottomNav(this, R.id.nav_requests);
         loadRequests();
     }
 
