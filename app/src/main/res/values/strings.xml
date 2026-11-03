@@ -66,6 +66,67 @@
     <string name="organizer_reject_message">Reject the pending request from %1$s?</string>
     <string name="organizer_accept_success">Request accepted. The available seat count was updated.</string>
     <string name="organizer_reject_success">Request rejected. The seat count was not changed.</string>
+    <string name="payment_title">Payments</string>
+    <string name="payment_try_again">Try again</string>
+    <string name="payment_signed_out">Sign in again to see this ride.</string>
+    <string name="payment_you">You</string>
+    <string name="payment_organizer_fallback">Organizer</string>
+    <string name="payment_rider_fallback">Rider %1$d</string>
+    <string name="payment_the_organizer">the organizer</string>
+    <string name="payment_section_shares">Your shares</string>
+    <string name="payment_section_rides">Rides you organized</string>
+    <string name="payment_empty">No ride costs yet. Once a ride you are on is completed, its cost shows up here.</string>
+    <string name="payment_needs_cost">Needs final cost</string>
+    <string name="payment_all_paid">All paid</string>
+    <string name="payment_no_riders">No riders to collect from</string>
+    <string name="payment_status_unpaid">Unpaid</string>
+    <string name="payment_status_paid_on">Paid %1$s</string>
+    <string name="payment_status_nothing_owed">Nothing owed</string>
+    <string name="payment_status_fronted">Paid the fare</string>
+    <string name="payment_status_overdue">Overdue, unpaid after %1$d days</string>
+    <string name="payment_status_flagged">Flagged, unpaid after %1$d days</string>
+    <string name="payment_record_title">Record final cost</string>
+    <string name="payment_cost_label">Final cost</string>
+    <string name="payment_split_even">Evenly</string>
+    <string name="payment_split_custom">Custom</string>
+    <string name="payment_split_group_label">How to split the cost</string>
+    <string name="payment_who_pays">Who pays what</string>
+    <string name="payment_amount_label">Amount</string>
+    <string name="payment_amount_for">Amount for %1$s</string>
+    <string name="payment_enter_cost_hint">Enter the final cost to see each share.</string>
+    <string name="payment_even_note">Any leftover cents go to the first people listed, so the shares add up exactly.</string>
+    <string name="payment_custom_left">%1$s assigned, %2$s left</string>
+    <string name="payment_custom_over">%1$s assigned, %2$s over</string>
+    <string name="payment_custom_exact">%1$s assigned, matches the final cost</string>
+    <string name="payment_review">Review split</string>
+    <string name="payment_review_title">Save this split?</string>
+    <string name="payment_review_line">%1$s: %2$s</string>
+    <string name="payment_review_total">Final cost: %1$s</string>
+    <string name="payment_review_note">Riders reimburse you outside the app. You can edit this until a rider marks their share paid.</string>
+    <string name="payment_review_save">Save split</string>
+    <string name="payment_saving">Saving…</string>
+    <string name="payment_ride_title">Ride payment</string>
+    <string name="payment_your_share">Your share</string>
+    <string name="payment_of_final_cost">of the %1$s final cost</string>
+    <string name="payment_outstanding">Still owed to you</string>
+    <string name="payment_no_cost_yet">No final cost yet</string>
+    <string name="payment_no_cost_yet_rider">%1$s has not recorded the final cost yet.</string>
+    <string name="payment_no_cost_yet_organizer">Record what the ride cost so each rider can see their share.</string>
+    <string name="payment_not_participant">You are not on this ride.</string>
+    <string name="payment_shares_title">Participants</string>
+    <string name="payment_outside_app">Payment happens outside the app, on Venmo or in cash. This only tracks who has paid.</string>
+    <string name="payment_reimburse">Reimburse %1$s outside the app, then mark it here.</string>
+    <string name="payment_mark_paid">Mark as paid</string>
+    <string name="payment_mark_paid_title">Mark %1$s as paid?</string>
+    <string name="payment_mark_paid_body">Do this after you have reimbursed %1$s. You cannot undo it.</string>
+    <string name="payment_mark_paid_cancel">Not yet</string>
+    <string name="payment_record_cost">Record final cost</string>
+    <string name="payment_edit_split">Edit split</string>
+    <string name="payment_locked_note">The split is locked because a rider marked their share paid.</string>
+    <string name="payment_flag">Flag</string>
+    <string name="payment_flag_name">Flag %1$s</string>
+    <string name="payment_flag_title">Flag %1$s?</string>
+    <string name="payment_flag_body">They have not marked their %1$s share paid after %2$d days. They will see this flag on their share until they pay.</string>
     <string-array name="search_seat_options">
         <item>Any number</item>
         <item>1+ seat</item>
@@ -138,4 +199,9 @@
         <item>@string/status_delayed</item>
         <item>@string/status_cancelled</item>
     </string-array>
+
+    <plurals name="payment_riders_paid">
+        <item quantity="one">%1$d of %2$d rider paid</item>
+        <item quantity="other">%1$d of %2$d riders paid</item>
+    </plurals>
 </resources>

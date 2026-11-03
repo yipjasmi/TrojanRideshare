@@ -36,4 +36,40 @@ public class RideTest {
 
         assertEquals(3, ride.getAvailableSeats());
     }
+
+    @Test
+    public void allParticipantIds_putsTheOrganizerFirstAndNeverCountsThemTwice() {
+        Ride ride = new Ride();
+        ride.organizerId = "organizer";
+
+        ride.participantIds = Arrays.asList("first", "second");
+        assertEquals(
+                Arrays.asList("organizer", "first", "second"),
+                ride.getAllParticipantIds()
+        );
+
+        ride.participantIds = Arrays.asList("first", "organizer", "second");
+        assertEquals(
+                Arrays.asList("organizer", "first", "second"),
+                ride.getAllParticipantIds()
+        );
+    }
+
+    @Test
+    public void allParticipantIds_handlesMissingParticipants() {
+        Ride ride = new Ride();
+        ride.organizerId = "organizer";
+        ride.participantIds = null;
+
+        assertEquals(Collections.singletonList("organizer"), ride.getAllParticipantIds());
+    }
+
+    @Test
+    public void allParticipantIds_skipsIdsThatCannotBeDocuments() {
+        Ride ride = new Ride();
+        ride.organizerId = "organizer";
+        ride.participantIds = Arrays.asList("rider", "bad/id", "", null);
+
+        assertEquals(Arrays.asList("organizer", "rider"), ride.getAllParticipantIds());
+    }
 }
