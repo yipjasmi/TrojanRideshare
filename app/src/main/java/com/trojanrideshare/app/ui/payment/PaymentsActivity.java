@@ -17,6 +17,7 @@ import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.OrganizerRideSummary;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.service.payment.PaymentService;
+import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
 
 import java.util.List;
@@ -84,6 +85,8 @@ public class PaymentsActivity extends AppCompatActivity {
             return;
         }
         currentUserId = user.getUid();
+
+        BottomNavHelper.setupBottomNav(this, R.id.nav_payments);
 
         paymentService = new PaymentService();
         stateContainer = findViewById(R.id.stateContainer);

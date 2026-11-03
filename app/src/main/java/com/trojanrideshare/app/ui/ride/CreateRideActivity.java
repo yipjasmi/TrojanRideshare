@@ -23,6 +23,7 @@ import com.trojanrideshare.app.service.ride.CreateRideService;
 import com.trojanrideshare.app.service.ride.RideInput;
 import com.trojanrideshare.app.service.ride.RideValidator;
 import com.trojanrideshare.app.service.ride.ValidationResult;
+import com.trojanrideshare.app.util.BottomNavHelper;
 
 import java.text.DateFormat;
 import java.util.Calendar;
@@ -48,6 +49,17 @@ public class CreateRideActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> originPicker;
     private ActivityResultLauncher<Intent> destinationPicker;
 
+    private String getCurrentUserId() {
+        String userId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
+        if (userId == null || userId.isEmpty()) {
+            com.google.firebase.auth.FirebaseUser currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser != null) {
+                userId = currentUser.getUid();
+            }
+        }
+        return userId;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -63,6 +75,8 @@ public class CreateRideActivity extends AppCompatActivity {
         costInput = findViewById(R.id.costInput);
         submitButton = findViewById(R.id.submitButton);
         loadingIndicator = findViewById(R.id.createLoadingIndicator);
+
+        BottomNavHelper.setupBottomNav(this, R.id.nav_create_ride);
 
         originPicker = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -150,7 +164,7 @@ public class CreateRideActivity extends AppCompatActivity {
         );
 
         setLoading(true);
-        String currentUserId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
+        String currentUserId = getCurrentUserId();
         createRideService.createRide(
                 input,
                 currentUserId,
