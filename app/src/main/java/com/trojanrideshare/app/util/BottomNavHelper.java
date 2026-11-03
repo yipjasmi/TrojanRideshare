@@ -27,6 +27,8 @@ public class BottomNavHelper {
                 intent = new Intent(activity, SearchActivity.class);
             } else if (id == R.id.nav_requests) {
                 intent = new Intent(activity, OrganizerRequestsActivity.class);
+            } else if (id == R.id.nav_history) {
+                intent = new Intent(activity, com.trojanrideshare.app.ui.history.HistoryActivity.class);
             } else if (id == R.id.nav_profile) {
                 intent = new Intent(activity, ProfileActivity.class);
             }
