@@ -35,6 +35,8 @@ public class NotificationsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_notifications);
 
+        findViewById(R.id.topBackButton).setOnClickListener(v -> finish());
+
         notificationDataAccess = new NotificationDataAccess();
         loadingIndicator = findViewById(R.id.notificationsLoadingIndicator);
         message = findViewById(R.id.notificationsMessage);

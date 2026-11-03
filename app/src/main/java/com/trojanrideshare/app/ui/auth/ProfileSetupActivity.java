@@ -30,6 +30,8 @@ public class ProfileSetupActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile_setup);
 
+        findViewById(R.id.topBackButton).setOnClickListener(v -> finish());
+
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 

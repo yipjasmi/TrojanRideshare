@@ -67,6 +67,8 @@ public class EditRideActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_edit_ride);
 
+        findViewById(R.id.topBackButton).setOnClickListener(v -> finish());
+
         rideDataAccess = new RideDataAccess();
         editRideService = new EditRideService();
         currentUserId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);

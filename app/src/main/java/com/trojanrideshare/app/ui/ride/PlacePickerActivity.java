@@ -64,6 +64,8 @@ public class PlacePickerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_place_picker);
 
+        findViewById(R.id.topBackButton).setOnClickListener(v -> finish());
+
         if (!Places.isInitialized()) {
             Places.initializeWithNewPlacesApiEnabled(
                     getApplicationContext(), BuildConfig.PLACES_API_KEY);

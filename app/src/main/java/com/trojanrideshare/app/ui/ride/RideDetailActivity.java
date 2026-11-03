@@ -58,6 +58,8 @@ public class RideDetailActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_ride_detail);
 
+        findViewById(R.id.topBackButton).setOnClickListener(v -> finish());
+
         rideDataAccess = new RideDataAccess();
         userDataAccess = new UserDataAccess();
         joinRequestService = new JoinRequestService();

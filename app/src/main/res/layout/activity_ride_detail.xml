@@ -11,6 +11,8 @@
         android:orientation="vertical"
         android:padding="24dp">
 
+        <include layout="@layout/layout_top_back_button" />
+
         <ProgressBar
             android:id="@+id/detailLoadingIndicator"
             android:layout_width="wrap_content"
