@@ -124,16 +124,38 @@ public class RideValidatorTest {
                 input("t", place("a"), place("b"), FUTURE, 4, -1.0), NOW);
 
         assertEquals(
-                RideValidator.ERROR_COST_NEGATIVE,
+                RideValidator.ERROR_COST_NOT_POSITIVE,
                 result.errorFor(RideValidator.FIELD_EXPECTED_COST));
     }
 
     @Test
-    public void validate_acceptsZeroCost() {
+    public void validate_rejectsZeroCost() {
         ValidationResult result = RideValidator.validate(
                 input("t", place("a"), place("b"), FUTURE, 4, 0.0), NOW);
 
-        assertTrue(result.isValid());
+        assertEquals(
+                RideValidator.ERROR_COST_NOT_POSITIVE,
+                result.errorFor(RideValidator.FIELD_EXPECTED_COST));
+    }
+
+    @Test
+    public void validate_rejectsMoreThanTwoDecimals() {
+        ValidationResult result = RideValidator.validate(
+                input("t", place("a"), place("b"), FUTURE, 4, 10.555), NOW);
+
+        assertEquals(
+                RideValidator.ERROR_COST_DECIMALS,
+                result.errorFor(RideValidator.FIELD_EXPECTED_COST));
+    }
+
+    @Test
+    public void validate_acceptsTwoDecimalCost() {
+        assertTrue(RideValidator.validate(
+                input("t", place("a"), place("b"), FUTURE, 4, 10.55), NOW).isValid());
+        assertTrue(RideValidator.validate(
+                input("t", place("a"), place("b"), FUTURE, 4, 0.01), NOW).isValid());
+        assertTrue(RideValidator.validate(
+                input("t", place("a"), place("b"), FUTURE, 4, 12.0), NOW).isValid());
     }
 
     private static RideInput input(

@@ -13,6 +13,8 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -24,6 +26,8 @@ import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
+import com.trojanrideshare.app.service.ride.EditRideService;
+import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
 
 import java.text.DateFormat;
@@ -45,10 +49,12 @@ public class RideDetailActivity extends AppCompatActivity {
     private TextView infoMessage;
     private Button joinButton;
     private Button editRideButton;
+    private Button completeRideButton;
 
     private RideDataAccess rideDataAccess;
     private UserDataAccess userDataAccess;
     private JoinRequestService joinRequestService;
+    private EditRideService editRideService;
     private String currentUserId;
     private Ride ride;
 
@@ -62,6 +68,7 @@ public class RideDetailActivity extends AppCompatActivity {
         rideDataAccess = new RideDataAccess();
         userDataAccess = new UserDataAccess();
         joinRequestService = new JoinRequestService();
+        editRideService = new EditRideService();
         currentUserId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
         if (currentUserId == null || currentUserId.trim().isEmpty()) {
             // Fall back to the signed-in user when the caller didn't pass an id
@@ -78,7 +85,9 @@ public class RideDetailActivity extends AppCompatActivity {
         joinButton = findViewById(R.id.joinButton);
         editRideButton = findViewById(R.id.editRideButton);
         joinButton.setOnClickListener(v -> requestToJoin());
+        completeRideButton = findViewById(R.id.completeRideButton);
         editRideButton.setOnClickListener(v -> openEditRide());
+        completeRideButton.setOnClickListener(v -> confirmComplete());
 
         editRideLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -137,17 +146,20 @@ public class RideDetailActivity extends AppCompatActivity {
         loadOrganizerName(ride.organizerId);
         setText(R.id.detailRoute, getString(
                 R.string.search_route_format, addressOf(ride.origin), addressOf(ride.destination)));
-        setText(R.id.detailDeparture, getString(
-                R.string.search_departure_format, formatDeparture(ride.departureTime)));
+        String departureText = getString(
+                R.string.search_departure_format, formatDeparture(ride.departureTime));
+        if (Ride.STATUS_DELAYED.equals(ride.status) && ride.originalDepartureTime != null) {
+            departureText += " (delayed from " + formatDeparture(ride.originalDepartureTime) + ")";
+        }
+        setText(R.id.detailDeparture, departureText);
 
         int availableSeats = ride.getAvailableSeats();
-        setText(R.id.detailSeats, getResources().getQuantityString(
-                R.plurals.search_available_seats, availableSeats, availableSeats));
+        setText(R.id.detailSeats, ridersLine(ride, availableSeats));
         setText(R.id.detailCost, getString(
                 R.string.ride_detail_cost_format,
                 String.format(Locale.US, "$%.2f", ride.expectedCost)));
         setText(R.id.detailStatus, getString(
-                R.string.ride_detail_status_format, statusLabel(ride.status)));
+                R.string.ride_detail_status_format, statusLine(ride)));
 
         configureAction(ride, availableSeats);
     }
@@ -175,13 +187,23 @@ public class RideDetailActivity extends AppCompatActivity {
     private void configureAction(Ride ride, int availableSeats) {
         joinButton.setVisibility(View.GONE);
         editRideButton.setVisibility(View.GONE);
+        completeRideButton.setVisibility(View.GONE);
 
         boolean signedIn = currentUserId != null && !currentUserId.trim().isEmpty();
         if (!signedIn) {
             return;
         }
         if (currentUserId.equals(ride.organizerId)) {
-            editRideButton.setVisibility(View.VISIBLE);
+            if (ride.isActive()) {
+                // Delays are allowed until the ride is completed; completing waits for departure.
+                editRideButton.setVisibility(View.VISIBLE);
+                if (ride.hasDeparted(Timestamp.now())) {
+                    completeRideButton.setVisibility(View.VISIBLE);
+                    showInfo(getString(R.string.ride_detail_badge_organizer)
+                            + " It has departed; complete it when the trip is done.");
+                    return;
+                }
+            }
             showInfo(getString(R.string.ride_detail_badge_organizer));
             return;
         }
@@ -229,6 +251,67 @@ public class RideDetailActivity extends AppCompatActivity {
         intent.putExtra(EditRideActivity.EXTRA_RIDE_ID, ride.id);
         intent.putExtra(EditRideActivity.EXTRA_CURRENT_USER_ID, currentUserId);
         editRideLauncher.launch(intent);
+    }
+
+    private void confirmComplete() {
+        if (ride == null) {
+            return;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Complete this ride?")
+                .setMessage("Completed rides can't be reopened or changed. "
+                        + "You'll enter the actual cost next.")
+                .setNegativeButton("Not yet", null)
+                .setPositiveButton("Complete", (dialog, which) -> completeRide())
+                .show();
+    }
+
+    private void completeRide() {
+        completeRideButton.setEnabled(false);
+        editRideService.completeRide(ride, currentUserId, new EditRideService.Callback() {
+            @Override
+            public void onSuccess() {
+                completeRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, "Ride completed.", Toast.LENGTH_SHORT).show();
+                Intent costIntent = new Intent(RideDetailActivity.this, RecordCostActivity.class);
+                costIntent.putExtra(RecordCostActivity.EXTRA_RIDE_ID, ride.id);
+                startActivity(costIntent);
+                loadRide(ride.id);
+            }
+
+            @Override
+            public void onDenied(String reason) {
+                completeRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, reason, Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            public void onError(String message) {
+                completeRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    /** "On Time · Open", "Delayed · Full", or just "Completed"/"Cancelled". */
+    private String statusLine(Ride ride) {
+        String activity = statusLabel(ride.status);
+        if (!ride.isActive()) {
+            return activity;
+        }
+        String capacity = Ride.CAPACITY_FULL.equals(ride.getDerivedCapacityStatus()) ? "Full" : "Open";
+        return activity + " · " + capacity;
+    }
+
+    /** Rider count including the organizer; capacity is N/A once completed or cancelled. */
+    private String ridersLine(Ride ride, int availableSeats) {
+        String count = String.format(Locale.US, "Riders: %d of %d (including organizer)",
+                ride.getRiderCount(), ride.maxRiders);
+        if (!ride.isActive()) {
+            return count;
+        }
+        return count + " · " + getResources().getQuantityString(
+                R.plurals.search_available_seats, availableSeats, availableSeats);
     }
 
     private void showInfo(String message) {

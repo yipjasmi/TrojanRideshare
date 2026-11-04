@@ -21,7 +21,10 @@ public class Ride {
     public String organizerId;
     public PlaceInfo origin;
     public PlaceInfo destination;
+    /** Current departure time. A delay replaces it, so search, sorting and summaries use it. */
     public Timestamp departureTime;
+    /** The time originally posted, kept once the ride is first marked Delayed. */
+    public Timestamp originalDepartureTime;
     public int maxRiders;
     public double expectedCost;
     public String status;
@@ -31,6 +34,22 @@ public class Ride {
     public Timestamp createdAt;
 
     public Ride() {}
+
+    /** On Time or Delayed. Completed and Cancelled are final. */
+    @Exclude
+    public boolean isActive() {
+        return STATUS_ON_TIME.equals(status) || STATUS_DELAYED.equals(status);
+    }
+
+    @Exclude
+    public boolean hasDeparted(Timestamp now) {
+        return departureTime != null && now != null && departureTime.compareTo(now) <= 0;
+    }
+
+    @Exclude
+    public int getRiderCount() {
+        return participantIds == null ? 0 : participantIds.size();
+    }
 
     @Exclude
     public int getAvailableSeats() {

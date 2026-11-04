@@ -2,20 +2,15 @@ package com.trojanrideshare.app.ui.ride;
 
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
-import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.Timestamp;
@@ -24,30 +19,25 @@ import com.trojanrideshare.app.data.ride.RideDataAccess;
 import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.service.ride.EditRideService;
-import com.trojanrideshare.app.service.ride.RideInput;
-import com.trojanrideshare.app.service.ride.RideValidator;
-import com.trojanrideshare.app.service.ride.ValidationResult;
 
 import java.text.DateFormat;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 
+/**
+ * Organizer screen for marking a ride Delayed with a new departure time.
+ *
+ * <p>The posted title, date, locations, expected cost and maximum riders are shown read-only:
+ * they stay fixed after posting.
+ */
 public class EditRideActivity extends AppCompatActivity {
     public static final String EXTRA_RIDE_ID = "rideId";
     public static final String EXTRA_CURRENT_USER_ID = "currentUserId";
 
-    // Spinner positions map to these ride statuses.
-    private static final String[] STATUS_BY_POSITION = {
-            Ride.STATUS_ON_TIME, Ride.STATUS_DELAYED, Ride.STATUS_CANCELLED
-    };
-
-    private EditText titleInput;
-    private EditText originInput;
-    private EditText destinationInput;
-    private EditText departureInput;
-    private EditText maxRidersInput;
-    private EditText costInput;
-    private Spinner statusSpinner;
-    private Button saveButton;
+    private EditText newDepartureInput;
+    private TextView delayError;
+    private Button delayButton;
     private ProgressBar loadingIndicator;
 
     private RideDataAccess rideDataAccess;
@@ -55,12 +45,7 @@ public class EditRideActivity extends AppCompatActivity {
 
     private String currentUserId;
     private Ride ride;
-    private PlaceInfo origin;
-    private PlaceInfo destination;
-    private Calendar departure;
-
-    private ActivityResultLauncher<Intent> originPicker;
-    private ActivityResultLauncher<Intent> destinationPicker;
+    private Calendar newDeparture;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,29 +56,14 @@ public class EditRideActivity extends AppCompatActivity {
         editRideService = new EditRideService();
         currentUserId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
 
-        titleInput = findViewById(R.id.titleInput);
-        originInput = findViewById(R.id.originInput);
-        destinationInput = findViewById(R.id.destinationInput);
-        departureInput = findViewById(R.id.departureInput);
-        maxRidersInput = findViewById(R.id.maxRidersInput);
-        costInput = findViewById(R.id.costInput);
-        statusSpinner = findViewById(R.id.statusSpinner);
-        saveButton = findViewById(R.id.saveButton);
+        newDepartureInput = findViewById(R.id.newDepartureInput);
+        delayError = findViewById(R.id.delayError);
+        delayButton = findViewById(R.id.markDelayedButton);
         loadingIndicator = findViewById(R.id.editLoadingIndicator);
 
-        originPicker = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> handlePlaceResult(result.getResultCode(), result.getData(), true));
-        destinationPicker = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> handlePlaceResult(result.getResultCode(), result.getData(), false));
-
-        originInput.setOnClickListener(v -> originPicker.launch(
-                new Intent(this, PlacePickerActivity.class)));
-        destinationInput.setOnClickListener(v -> destinationPicker.launch(
-                new Intent(this, PlacePickerActivity.class)));
-        departureInput.setOnClickListener(v -> pickDeparture());
-        saveButton.setOnClickListener(v -> save());
+        newDepartureInput.setOnClickListener(v -> pickDeparture());
+        delayButton.setOnClickListener(v -> markDelayed());
+        findViewById(R.id.editRideBack).setOnClickListener(v -> finish());
 
         String rideId = getIntent().getStringExtra(EXTRA_RIDE_ID);
         if (TextUtils.isEmpty(rideId)) {
@@ -111,71 +81,67 @@ public class EditRideActivity extends AppCompatActivity {
             public void onSuccess(Ride loaded) {
                 setLoading(false);
                 if (loaded == null) {
-                    Toast.makeText(
-                            EditRideActivity.this, R.string.edit_ride_load_error,
+                    Toast.makeText(EditRideActivity.this, R.string.edit_ride_load_error,
                             Toast.LENGTH_LONG).show();
                     finish();
                     return;
                 }
                 ride = loaded;
-                prefill(loaded);
+                bind(loaded);
             }
 
             @Override
             public void onError(Exception exception) {
                 setLoading(false);
-                Toast.makeText(
-                        EditRideActivity.this, R.string.edit_ride_load_error,
+                Toast.makeText(EditRideActivity.this, R.string.edit_ride_load_error,
                         Toast.LENGTH_LONG).show();
                 finish();
             }
         });
     }
 
-    private void prefill(Ride ride) {
-        titleInput.setText(ride.title);
-        origin = ride.origin;
-        destination = ride.destination;
-        originInput.setText(ride.origin == null ? "" : ride.origin.address);
-        destinationInput.setText(ride.destination == null ? "" : ride.destination.address);
-        if (ride.departureTime != null) {
-            departure = Calendar.getInstance();
-            departure.setTime(ride.departureTime.toDate());
-            departureInput.setText(formatDeparture(departure));
+    private void bind(Ride ride) {
+        setText(R.id.fixedTitle, "Title: " + ride.title);
+        setText(R.id.fixedRoute, "Route: " + addressOf(ride.origin) + " → " + addressOf(ride.destination));
+        Timestamp posted = ride.originalDepartureTime != null ? ride.originalDepartureTime : ride.departureTime;
+        setText(R.id.fixedDate, "Posted departure: " + format(posted));
+        setText(R.id.fixedMaxRiders, "Max riders (incl. organizer): " + ride.maxRiders);
+        setText(R.id.fixedCost, String.format(Locale.US, "Expected total cost: $%.2f", ride.expectedCost));
+        setText(R.id.currentStatus, "Current status: "
+                + (Ride.STATUS_DELAYED.equals(ride.status) ? "Delayed" : statusName(ride.status))
+                + " · departs " + format(ride.departureTime));
+
+        boolean canDelay = ride.isActive();
+        newDepartureInput.setEnabled(canDelay);
+        delayButton.setEnabled(canDelay);
+        if (!canDelay) {
+            showError(EditRideService.REASON_FINAL);
         }
-        maxRidersInput.setText(String.valueOf(ride.maxRiders));
-        costInput.setText(String.format(java.util.Locale.US, "%.2f", ride.expectedCost));
-        statusSpinner.setSelection(positionForStatus(ride.status));
     }
 
-    private void save() {
-        String newStatus = STATUS_BY_POSITION[statusSpinner.getSelectedItemPosition()];
+    private void markDelayed() {
+        if (ride == null) return;
+        Timestamp chosen = newDeparture == null ? null : new Timestamp(newDeparture.getTime());
+        String error = EditRideService.delayError(ride, chosen, currentUserId, Timestamp.now());
+        if (error != null) {
+            showError(error);
+            return;
+        }
+        showError(null);
         setLoading(true);
-
-        EditRideService.Callback callback = new EditRideService.Callback() {
+        editRideService.markDelayed(ride, chosen, currentUserId, new EditRideService.Callback() {
             @Override
             public void onSuccess() {
                 setLoading(false);
-                Toast.makeText(
-                        EditRideActivity.this,
-                        Ride.STATUS_CANCELLED.equals(newStatus)
-                                ? R.string.edit_ride_cancelled
-                                : R.string.edit_ride_success,
-                        Toast.LENGTH_LONG).show();
+                Toast.makeText(EditRideActivity.this, "Ride marked Delayed.", Toast.LENGTH_LONG).show();
                 setResult(RESULT_OK);
                 finish();
             }
 
             @Override
-            public void onInvalid(ValidationResult result) {
-                setLoading(false);
-                showErrors(result);
-            }
-
-            @Override
             public void onDenied(String reason) {
                 setLoading(false);
-                Toast.makeText(EditRideActivity.this, reason, Toast.LENGTH_LONG).show();
+                showError(reason);
             }
 
             @Override
@@ -183,129 +149,77 @@ public class EditRideActivity extends AppCompatActivity {
                 setLoading(false);
                 Toast.makeText(EditRideActivity.this, message, Toast.LENGTH_LONG).show();
             }
-        };
-
-        if (Ride.STATUS_CANCELLED.equals(newStatus)) {
-            editRideService.cancelRide(ride, currentUserId, callback);
-        } else {
-            RideInput input = new RideInput(
-                    titleInput.getText().toString(),
-                    origin,
-                    destination,
-                    departure == null ? null : new Timestamp(departure.getTime()),
-                    parseInteger(maxRidersInput.getText().toString()),
-                    parseDouble(costInput.getText().toString()));
-            editRideService.updateRide(ride, input, newStatus, currentUserId, callback);
-        }
-    }
-
-    private void handlePlaceResult(int resultCode, @Nullable Intent data, boolean isOrigin) {
-        if (resultCode != RESULT_OK || data == null) {
-            return;
-        }
-        PlaceInfo info = new PlaceInfo();
-        info.placeId = data.getStringExtra(PlacePickerActivity.EXTRA_PLACE_ID);
-        info.address = data.getStringExtra(PlacePickerActivity.EXTRA_ADDRESS);
-        info.lat = data.getDoubleExtra(PlacePickerActivity.EXTRA_LAT, 0);
-        info.lng = data.getDoubleExtra(PlacePickerActivity.EXTRA_LNG, 0);
-        if (isOrigin) {
-            origin = info;
-            originInput.setText(info.address);
-        } else {
-            destination = info;
-            destinationInput.setText(info.address);
-        }
+        });
     }
 
     private void pickDeparture() {
-        Calendar initial = departure != null ? departure : Calendar.getInstance();
+        Calendar initial = Calendar.getInstance();
+        if (newDeparture != null) {
+            initial = newDeparture;
+        } else if (ride != null && ride.departureTime != null) {
+            initial.setTime(ride.departureTime.toDate());
+        }
+        final Calendar base = initial;
         new DatePickerDialog(
                 this,
                 (view, year, month, dayOfMonth) -> {
                     Calendar picked = Calendar.getInstance();
-                    picked.set(Calendar.YEAR, year);
-                    picked.set(Calendar.MONTH, month);
-                    picked.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-                    pickDepartureTime(picked);
+                    picked.set(year, month, dayOfMonth);
+                    new TimePickerDialog(
+                            this,
+                            (timeView, hourOfDay, minute) -> {
+                                picked.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                                picked.set(Calendar.MINUTE, minute);
+                                picked.set(Calendar.SECOND, 0);
+                                picked.set(Calendar.MILLISECOND, 0);
+                                newDeparture = picked;
+                                newDepartureInput.setText(format(new Timestamp(picked.getTime())));
+                                showError(null);
+                            },
+                            base.get(Calendar.HOUR_OF_DAY),
+                            base.get(Calendar.MINUTE),
+                            false
+                    ).show();
                 },
-                initial.get(Calendar.YEAR),
-                initial.get(Calendar.MONTH),
-                initial.get(Calendar.DAY_OF_MONTH)
+                base.get(Calendar.YEAR),
+                base.get(Calendar.MONTH),
+                base.get(Calendar.DAY_OF_MONTH)
         ).show();
     }
 
-    private void pickDepartureTime(Calendar date) {
-        Calendar initial = departure != null ? departure : Calendar.getInstance();
-        new TimePickerDialog(
-                this,
-                (view, hourOfDay, minute) -> {
-                    date.set(Calendar.HOUR_OF_DAY, hourOfDay);
-                    date.set(Calendar.MINUTE, minute);
-                    date.set(Calendar.SECOND, 0);
-                    date.set(Calendar.MILLISECOND, 0);
-                    departure = date;
-                    departureInput.setText(formatDeparture(date));
-                },
-                initial.get(Calendar.HOUR_OF_DAY),
-                initial.get(Calendar.MINUTE),
-                false
-        ).show();
-    }
-
-    private void showErrors(ValidationResult result) {
-        setError(R.id.titleError, result.errorFor(RideValidator.FIELD_TITLE));
-        setError(R.id.originError, result.errorFor(RideValidator.FIELD_ORIGIN));
-        setError(R.id.destinationError, result.errorFor(RideValidator.FIELD_DESTINATION));
-        setError(R.id.departureError, result.errorFor(RideValidator.FIELD_DEPARTURE_TIME));
-        setError(R.id.maxRidersError, result.errorFor(RideValidator.FIELD_MAX_RIDERS));
-        setError(R.id.costError, result.errorFor(RideValidator.FIELD_EXPECTED_COST));
-    }
-
-    private void setError(int viewId, @Nullable String message) {
-        TextView view = findViewById(viewId);
+    private void showError(String message) {
         if (message == null) {
-            view.setText("");
-            view.setVisibility(View.GONE);
+            delayError.setText("");
+            delayError.setVisibility(View.GONE);
         } else {
-            view.setText(message);
-            view.setVisibility(View.VISIBLE);
+            delayError.setText(message);
+            delayError.setVisibility(View.VISIBLE);
         }
     }
 
     private void setLoading(boolean loading) {
         loadingIndicator.setVisibility(loading ? View.VISIBLE : View.GONE);
-        saveButton.setEnabled(!loading);
+        delayButton.setEnabled(!loading && ride != null && ride.isActive());
     }
 
-    private static int positionForStatus(String status) {
-        for (int i = 0; i < STATUS_BY_POSITION.length; i++) {
-            if (STATUS_BY_POSITION[i].equals(status)) {
-                return i;
-            }
-        }
-        return 0;
+    private void setText(int id, String text) {
+        ((TextView) findViewById(id)).setText(text);
     }
 
-    private static String formatDeparture(Calendar calendar) {
-        return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                .format(calendar.getTime());
+    private static String statusName(String status) {
+        if (Ride.STATUS_ON_TIME.equals(status)) return "On Time";
+        if (Ride.STATUS_COMPLETED.equals(status)) return "Completed";
+        if (Ride.STATUS_CANCELLED.equals(status)) return "Cancelled";
+        return "Unknown";
     }
 
-    @Nullable
-    private static Integer parseInteger(String value) {
-        try {
-            return Integer.valueOf(value.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
+    private static String addressOf(PlaceInfo place) {
+        return place == null || place.address == null ? "?" : place.address;
     }
 
-    @Nullable
-    private static Double parseDouble(String value) {
-        try {
-            return Double.valueOf(value.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
+    private static String format(Timestamp timestamp) {
+        if (timestamp == null) return "—";
+        Date date = timestamp.toDate();
+        return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(date);
     }
 }

@@ -33,14 +33,14 @@ public class RideScheduleServiceTest {
     }
 
     @Test
-    public void partition_pastRideIsCompletedEvenIfStillMarkedActive() {
+    public void partition_departedRideStaysUpcomingUntilOrganizerCompletes() {
         Ride ride = ride("r", Ride.STATUS_DELAYED, PAST);
 
         RideScheduleService.Schedule schedule =
                 RideScheduleService.partition(Collections.singletonList(ride), NOW);
 
-        assertEquals(Collections.singletonList(ride), schedule.completed);
-        assertTrue(schedule.upcoming.isEmpty());
+        assertEquals(Collections.singletonList(ride), schedule.upcoming);
+        assertTrue(schedule.completed.isEmpty());
     }
 
     @Test
@@ -68,27 +68,27 @@ public class RideScheduleServiceTest {
     @Test
     public void partition_mixedSetSplitsCorrectly() {
         Ride upcoming = ride("up", Ride.STATUS_ON_TIME, FUTURE);
-        Ride departed = ride("done", Ride.STATUS_ON_TIME, PAST);
+        Ride done = ride("done", Ride.STATUS_COMPLETED, PAST);
         Ride cancelled = ride("x", Ride.STATUS_CANCELLED, FUTURE);
 
         RideScheduleService.Schedule schedule =
-                RideScheduleService.partition(Arrays.asList(upcoming, departed, cancelled), NOW);
+                RideScheduleService.partition(Arrays.asList(upcoming, done, cancelled), NOW);
 
         assertEquals(Collections.singletonList(upcoming), schedule.upcoming);
-        assertEquals(Collections.singletonList(departed), schedule.completed);
+        assertEquals(Collections.singletonList(done), schedule.completed);
     }
 
     @Test
-    public void needsCompletion_trueOnlyForDepartedActiveRides() {
-        assertTrue(RideScheduleService.needsCompletion(
+    public void awaitingCompletion_trueOnlyForDepartedActiveRides() {
+        assertTrue(RideScheduleService.awaitingCompletion(
                 ride("a", Ride.STATUS_ON_TIME, PAST), NOW));
-        assertTrue(RideScheduleService.needsCompletion(
+        assertTrue(RideScheduleService.awaitingCompletion(
                 ride("b", Ride.STATUS_DELAYED, PAST), NOW));
-        assertFalse(RideScheduleService.needsCompletion(
+        assertFalse(RideScheduleService.awaitingCompletion(
                 ride("c", Ride.STATUS_ON_TIME, FUTURE), NOW));
-        assertFalse(RideScheduleService.needsCompletion(
+        assertFalse(RideScheduleService.awaitingCompletion(
                 ride("d", Ride.STATUS_CANCELLED, PAST), NOW));
-        assertFalse(RideScheduleService.needsCompletion(
+        assertFalse(RideScheduleService.awaitingCompletion(
                 ride("e", Ride.STATUS_COMPLETED, PAST), NOW));
     }
 

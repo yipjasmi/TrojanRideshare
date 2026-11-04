@@ -206,11 +206,8 @@ public class ProfileActivity extends AppCompatActivity {
                         rides.add(ride);
                     });
 
-                    Timestamp now = Timestamp.now();
-                    if (isOwnProfile) {
-                        flipDepartedRides(rides, now);
-                    }
-                    RideScheduleService.Schedule schedule = RideScheduleService.partition(rides, now);
+                    RideScheduleService.Schedule schedule =
+                            RideScheduleService.partition(rides, Timestamp.now());
 
                     upcomingRidesListView.setAdapter(new ProfileRideAdapter(schedule.upcoming, false));
                     completedRidesListView.setAdapter(new ProfileRideAdapter(schedule.completed, true));
@@ -294,6 +291,8 @@ public class ProfileActivity extends AppCompatActivity {
             String status;
             if (completedList) {
                 status = "Completed";
+            } else if (RideScheduleService.awaitingCompletion(ride, Timestamp.now())) {
+                status = "Departed, awaiting completion";
             } else if (Ride.STATUS_DELAYED.equals(ride.status)) {
                 status = "Delayed";
             } else {
@@ -306,16 +305,6 @@ public class ProfileActivity extends AppCompatActivity {
 
     private static String addressOf(com.trojanrideshare.app.model.PlaceInfo place) {
         return place == null || place.address == null ? "?" : place.address;
-    }
-
-    /** Best-effort: persist the completed status for rides whose departure has passed. */
-    private void flipDepartedRides(List<Ride> rides, Timestamp now) {
-        for (Ride ride : rides) {
-            if (ride.id != null && RideScheduleService.needsCompletion(ride, now)) {
-                db.collection("rides").document(ride.id)
-                        .update("status", Ride.STATUS_COMPLETED);
-            }
-        }
     }
 
     private void signOut() {

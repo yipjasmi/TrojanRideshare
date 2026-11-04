@@ -96,6 +96,14 @@
                 android:layout_marginTop="12dp"
                 android:text="@string/ride_detail_edit"
                 android:visibility="gone" />
+
+            <Button
+                android:id="@+id/completeRideButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Complete Ride"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>
