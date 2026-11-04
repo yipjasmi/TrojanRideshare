@@ -38,7 +38,10 @@ public final class RideValidator {
     public static final String ERROR_RIDERS_RANGE =
             "Number of riders must be between " + MIN_RIDERS + " and " + MAX_RIDERS;
     public static final String ERROR_COST_REQUIRED = "Expected cost is required";
-    public static final String ERROR_COST_NOT_POSITIVE = "Expected cost must be greater than $0.00";
+    public static final String ERROR_COST_ZERO =
+            "Expected cost can't be $0.00. Enter an amount greater than zero.";
+    public static final String ERROR_COST_NEGATIVE = "Expected cost can't be negative.";
+    public static final String ERROR_COST_INVALID = "Enter a dollar amount like 24.50.";
     public static final String ERROR_COST_DECIMALS =
             "Expected cost can have at most two decimal places";
 
@@ -81,8 +84,12 @@ public final class RideValidator {
 
         if (input.expectedCost == null) {
             errors.put(FIELD_EXPECTED_COST, ERROR_COST_REQUIRED);
-        } else if (!(input.expectedCost > 0)) {
-            errors.put(FIELD_EXPECTED_COST, ERROR_COST_NOT_POSITIVE);
+        } else if (input.expectedCost == 0) {
+            errors.put(FIELD_EXPECTED_COST, ERROR_COST_ZERO);
+        } else if (input.expectedCost < 0) {
+            errors.put(FIELD_EXPECTED_COST, ERROR_COST_NEGATIVE);
+        } else if (Double.isNaN(input.expectedCost) || Double.isInfinite(input.expectedCost)) {
+            errors.put(FIELD_EXPECTED_COST, ERROR_COST_INVALID);
         } else if (!hasAtMostTwoDecimals(input.expectedCost)) {
             errors.put(FIELD_EXPECTED_COST, ERROR_COST_DECIMALS);
         }

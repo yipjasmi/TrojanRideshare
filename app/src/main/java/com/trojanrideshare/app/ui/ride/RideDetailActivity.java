@@ -89,6 +89,7 @@ public class RideDetailActivity extends AppCompatActivity {
         infoMessage = findViewById(R.id.detailInfoMessage);
         joinButton = findViewById(R.id.joinButton);
         editRideButton = findViewById(R.id.editRideButton);
+        findViewById(R.id.rideDetailBack).setOnClickListener(v -> finish());
         joinButton.setOnClickListener(v -> showJoinDialog());
         completeRideButton = findViewById(R.id.completeRideButton);
         editRideButton.setOnClickListener(v -> openEditRide());

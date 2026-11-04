@@ -179,7 +179,7 @@
     <string name="ride_detail_badge_joined">You have joined this ride.</string>
     <string name="ride_detail_load_error">Could not load this ride. Please try again.</string>
     <string name="ride_detail_unknown_organizer">the organizer</string>
-    <string name="ride_detail_edit">Mark as Delayed</string>
+    <string name="ride_detail_edit">Mark as Delayed (change departure time)</string>
 
     <string name="edit_ride_title">Mark ride delayed</string>
     <string name="edit_ride_load_error">Could not load this ride. Please try again.</string>

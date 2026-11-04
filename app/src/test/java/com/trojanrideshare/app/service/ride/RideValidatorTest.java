@@ -124,7 +124,7 @@ public class RideValidatorTest {
                 input("t", place("a"), place("b"), FUTURE, 4, -1.0), NOW);
 
         assertEquals(
-                RideValidator.ERROR_COST_NOT_POSITIVE,
+                RideValidator.ERROR_COST_NEGATIVE,
                 result.errorFor(RideValidator.FIELD_EXPECTED_COST));
     }
 
@@ -134,7 +134,7 @@ public class RideValidatorTest {
                 input("t", place("a"), place("b"), FUTURE, 4, 0.0), NOW);
 
         assertEquals(
-                RideValidator.ERROR_COST_NOT_POSITIVE,
+                RideValidator.ERROR_COST_ZERO,
                 result.errorFor(RideValidator.FIELD_EXPECTED_COST));
     }
 
