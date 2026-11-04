@@ -62,20 +62,6 @@
                 android:text="@string/main_manage_requests_action" />
 
             <Button
-                android:id="@+id/createRideButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                android:text="@string/main_create_action" />
-
-            <Button
-                android:id="@+id/notificationsButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                android:text="@string/main_notifications_action" />
-
-            <Button
                 android:id="@+id/paymentsButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
