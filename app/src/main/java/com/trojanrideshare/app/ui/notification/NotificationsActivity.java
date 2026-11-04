@@ -1,5 +1,6 @@
 package com.trojanrideshare.app.ui.notification;
 
+import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -8,9 +9,11 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.Timestamp;
+import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.notification.NotificationDataAccess;
 import com.trojanrideshare.app.model.Notification;
@@ -34,6 +37,14 @@ public class NotificationsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_notifications);
+
+        findViewById(R.id.notificationsBack).setOnClickListener(v -> navigateToHome());
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                navigateToHome();
+            }
+        });
 
         notificationDataAccess = new NotificationDataAccess();
         loadingIndicator = findViewById(R.id.notificationsLoadingIndicator);
@@ -122,5 +133,12 @@ public class NotificationsActivity extends AppCompatActivity {
 
     private static String emptyFallback(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value;
+    }
+
+    private void navigateToHome() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 }

@@ -1,5 +1,6 @@
 package com.trojanrideshare.app.ui.search;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -9,11 +10,13 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
@@ -52,7 +55,13 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         requestsContainer = findViewById(R.id.organizerRequestsContainer);
         organizerId = getOrganizerId();
 
-        findViewById(R.id.organizerRequestsBack).setOnClickListener(view -> finish());
+        findViewById(R.id.organizerRequestsBack).setOnClickListener(view -> navigateToHome());
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                navigateToHome();
+            }
+        });
         BottomNavHelper.setupBottomNav(this, R.id.nav_requests);
         loadRequests();
     }
@@ -215,5 +224,12 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
                     callback
             );
         }
+    }
+
+    private void navigateToHome() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 }
