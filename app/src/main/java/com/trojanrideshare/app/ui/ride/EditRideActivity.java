@@ -13,12 +13,14 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.ride.RideDataAccess;
 import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.service.ride.EditRideService;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.Calendar;
@@ -51,6 +53,7 @@ public class EditRideActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_edit_ride);
+        SystemBarsHelper.applyPadding(this);
 
         rideDataAccess = new RideDataAccess();
         editRideService = new EditRideService();
@@ -63,7 +66,8 @@ public class EditRideActivity extends AppCompatActivity {
 
         newDepartureInput.setOnClickListener(v -> pickDeparture());
         delayButton.setOnClickListener(v -> markDelayed());
-        findViewById(R.id.editRideBack).setOnClickListener(v -> finish());
+        MaterialToolbar toolbar = findViewById(R.id.editRideToolbar);
+        toolbar.setNavigationOnClickListener(v -> finish());
 
         String rideId = getIntent().getStringExtra(EXTRA_RIDE_ID);
         if (TextUtils.isEmpty(rideId)) {

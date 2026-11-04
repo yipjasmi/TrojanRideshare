@@ -22,8 +22,10 @@ import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.api.net.FetchPlaceRequest;
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest;
 import com.google.android.libraries.places.api.net.PlacesClient;
+import com.google.android.material.appbar.MaterialToolbar;
 import com.trojanrideshare.app.BuildConfig;
 import com.trojanrideshare.app.R;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.util.Arrays;
 import java.util.List;
@@ -68,6 +70,9 @@ public class PlacePickerActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_place_picker);
+        SystemBarsHelper.applyPadding(this);
+        MaterialToolbar toolbar = findViewById(R.id.placePickerToolbar);
+        toolbar.setNavigationOnClickListener(v -> finish());
 
         if (!Places.isInitialized()) {
             Places.initializeWithNewPlacesApiEnabled(

@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
@@ -25,6 +26,7 @@ import com.trojanrideshare.app.service.ride.CreateRideService;
 import com.trojanrideshare.app.service.ride.RideInput;
 import com.trojanrideshare.app.service.ride.RideValidator;
 import com.trojanrideshare.app.service.ride.ValidationResult;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.Calendar;
@@ -54,8 +56,10 @@ public class CreateRideActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_create_ride);
+        SystemBarsHelper.applyPadding(this);
 
-        findViewById(R.id.createRideBack).setOnClickListener(v -> navigateToHome());
+        MaterialToolbar toolbar = findViewById(R.id.createRideToolbar);
+        toolbar.setNavigationOnClickListener(v -> navigateToHome());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {

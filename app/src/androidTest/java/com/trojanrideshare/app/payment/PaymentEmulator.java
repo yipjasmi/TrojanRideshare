@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 // Skips the tests unless these are running on the host:
@@ -174,8 +175,13 @@ final class PaymentEmulator {
         String email = UUID.randomUUID() + "@usc.edu";
         String uid = signInWithGoogle(email).getUid();
         emails.put(uid, email);
+        // The users rules only accept a profile with the account's email and a 10-digit USC ID,
+        // same as signup writes.
         Map<String, Object> profile = new HashMap<>();
         profile.put("fullName", name);
+        profile.put("email", email);
+        profile.put("uscId", String.format(Locale.US, "%010d",
+                ThreadLocalRandom.current().nextLong(10_000_000_000L)));
         await(firestore().collection("users").document(uid).set(profile));
         return uid;
     }
@@ -199,25 +205,56 @@ final class PaymentEmulator {
 
     static void signUpWithPassword(String email) throws Exception {
         await(FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, PASSWORD));
+        // Same as above: a read sent before Firestore hears about the new user goes out as the
+        // previous one.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> { });
     }
 
     String seedRide(String status) throws Exception {
         return seedRide(status, Arrays.asList(riderA, riderB));
     }
 
+    // The rides rules only let the app post a fresh On Time ride with the organizer alone, so the
+    // ride is posted that way and then moved to the state the test needs with the admin token.
     String seedRide(String status, List<String> riders) throws Exception {
         signIn(organizer);
         DocumentReference ride = firestore().collection("rides").document();
         Map<String, Object> fields = new HashMap<>();
         fields.put("title", "LAX run before finals");
         fields.put("organizerId", organizer);
-        fields.put("status", status);
-        fields.put("participantIds", riders);
+        fields.put("status", Ride.STATUS_ON_TIME);
+        fields.put("participantIds", Arrays.asList(organizer));
         fields.put("departureTime", Timestamp.now());
         fields.put("expectedCost", 40.0);
         fields.put("maxRiders", 4);
         await(ride.set(fields));
+        adminUpdate("rides/" + ride.getId(),
+                "\"status\":{\"stringValue\":\"" + status + "\"},"
+                        + "\"participantIds\":" + stringArray(riders),
+                "\"status\",\"participantIds\"");
         return ride.getId();
+    }
+
+    void moveDeparture(String rideId, long fromNowMillis) throws Exception {
+        adminUpdate("rides/" + rideId,
+                "\"departureTime\":" + timestamp(System.currentTimeMillis() + fromNowMillis),
+                "\"departureTime\"");
+    }
+
+    // The organizer can't change a posted title, so an untitled ride has to be made as admin.
+    void clearTitle(String rideId) throws Exception {
+        adminUpdate("rides/" + rideId, "\"title\":{\"nullValue\":null}", "\"title\"");
+    }
+
+    private static String stringArray(List<String> values) {
+        StringBuilder json = new StringBuilder("{\"arrayValue\":{\"values\":[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) json.append(',');
+            String value = values.get(i);
+            json.append(value == null ? "{\"nullValue\":null}" : "{\"stringValue\":\""
+                    + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}");
+        }
+        return json.append("]}}").toString();
     }
 
     String seedCompletedRide() throws Exception {
@@ -228,11 +265,11 @@ final class PaymentEmulator {
     // rule that assignedAt has to be the server's own time.
     void backdateShare(String paymentId, int days) throws Exception {
         long when = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days);
-        adminUpdate(paymentId, "\"assignedAt\":" + timestamp(when), "\"assignedAt\"");
+        adminUpdate("payments/" + paymentId, "\"assignedAt\":" + timestamp(when), "\"assignedAt\"");
     }
 
     void markPaidFromAnotherDevice(String paymentId) throws Exception {
-        adminUpdate(paymentId,
+        adminUpdate("payments/" + paymentId,
                 "\"paid\":{\"booleanValue\":true},\"paidAt\":"
                         + timestamp(System.currentTimeMillis()),
                 "\"paid\",\"paidAt\"");
@@ -244,10 +281,9 @@ final class PaymentEmulator {
         return "{\"timestampValue\":\"" + iso.format(new Date(millis)) + "\"}";
     }
 
-    private void adminUpdate(String paymentId, String fields, String fieldPaths) throws Exception {
+    private void adminUpdate(String path, String fields, String fieldPaths) throws Exception {
         String project = FirebaseApp.getInstance().getOptions().getProjectId();
-        String name = "projects/" + project
-                + "/databases/(default)/documents/payments/" + paymentId;
+        String name = "projects/" + project + "/databases/(default)/documents/" + path;
         String body = "{\"writes\":[{\"update\":{\"name\":\"" + name
                 + "\",\"fields\":{" + fields + "}},"
                 + "\"updateMask\":{\"fieldPaths\":[" + fieldPaths + "]}}]}";

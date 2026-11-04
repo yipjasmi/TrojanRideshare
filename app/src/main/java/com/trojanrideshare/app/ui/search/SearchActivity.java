@@ -44,6 +44,7 @@ import com.trojanrideshare.app.service.search.SearchService;
 import com.trojanrideshare.app.ui.ride.CreateRideActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -113,6 +114,7 @@ public class SearchActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_search);
+        SystemBarsHelper.applyPadding(this);
 
         bindViews();
         BottomNavHelper.setupBottomNav(this, R.id.nav_find);

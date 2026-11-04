@@ -18,6 +18,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.R;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.util.Calendar;
 
@@ -61,6 +62,7 @@ public class SignUpActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sign_up);
+        SystemBarsHelper.applyPadding(this);
 
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
