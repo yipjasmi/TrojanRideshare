@@ -164,7 +164,6 @@
     <string name="ride_detail_title">Ride details</string>
     <string name="ride_detail_organizer_format">Organized by %1$s</string>
     <string name="ride_detail_cost_format">Expected cost: %1$s</string>
-    <string name="ride_detail_status_format">Status: %1$s</string>
     <string name="ride_detail_badge_organizer">You are the organizer of this ride.</string>
     <string name="ride_detail_badge_joined">You have joined this ride.</string>
     <string name="ride_detail_load_error">Could not load this ride. Please try again.</string>
@@ -178,7 +177,13 @@
     <string name="status_delayed">Delayed</string>
     <string name="status_cancelled">Cancelled</string>
     <string name="status_completed">Completed</string>
+    <string name="status_departed">Departed</string>
     <string name="status_unknown">Unknown</string>
+
+    <string name="seats_taken_description">%1$d of %2$d seats taken</string>
+    <string name="seats_full">Full</string>
+    <string name="cost_estimate_each">~%1$s each</string>
+    <string name="cost_estimate_each_if_you_join">~%1$s each if you join</string>
 
     <plurals name="payment_riders_paid">
         <item quantity="one">%1$d of %2$d rider paid</item>

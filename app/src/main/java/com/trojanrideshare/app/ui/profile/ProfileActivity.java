@@ -30,6 +30,8 @@ import com.trojanrideshare.app.service.ride.RideScheduleService;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.RideSeats;
+import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
@@ -280,13 +282,12 @@ public class ProfileActivity extends AppCompatActivity {
         }
         RideScheduleService.Schedule schedule =
                 RideScheduleService.partition(tabRides, Timestamp.now());
-        fillList(upcomingRidesListView, upcomingEmptyTextView, schedule.upcoming, false);
-        fillList(completedRidesListView, completedEmptyTextView, schedule.completed, true);
+        fillList(upcomingRidesListView, upcomingEmptyTextView, schedule.upcoming);
+        fillList(completedRidesListView, completedEmptyTextView, schedule.completed);
     }
 
     /** Rows sit in the page itself (no inner scrolling box), separated by thin dividers. */
-    private void fillList(LinearLayout container, TextView emptyView, List<Ride> rides,
-                          boolean completedList) {
+    private void fillList(LinearLayout container, TextView emptyView, List<Ride> rides) {
         container.removeAllViews();
         emptyView.setVisibility(rides.isEmpty() ? View.VISIBLE : View.GONE);
         LayoutInflater inflater = LayoutInflater.from(this);
@@ -295,7 +296,7 @@ public class ProfileActivity extends AppCompatActivity {
                 container.addView(new com.google.android.material.divider.MaterialDivider(this));
             }
             View row = inflater.inflate(R.layout.item_profile_ride, container, false);
-            bindRideRow(row, rides.get(i), completedList);
+            bindRideRow(row, rides.get(i));
             container.addView(row);
         }
     }
@@ -331,12 +332,16 @@ public class ProfileActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-    private void bindRideRow(View row, Ride ride, boolean completedList) {
+    private void bindRideRow(View row, Ride ride) {
         ((TextView) row.findViewById(R.id.profileRideTitle)).setText(
                 ride.title == null || ride.title.trim().isEmpty() ? "Untitled ride" : ride.title);
+        TextView status = row.findViewById(R.id.profileRideStatus);
+        RideStatusChip.of(ride, Timestamp.now()).applyTo(status);
         ((TextView) row.findViewById(R.id.profileRideRoute)).setText(
                 addressOf(ride.origin) + " → " + addressOf(ride.destination));
-        ((TextView) row.findViewById(R.id.profileRideMeta)).setText(metaLine(ride, completedList));
+        ((TextView) row.findViewById(R.id.profileRideMeta)).setText(metaLine(ride));
+        TextView seats = row.findViewById(R.id.profileRideSeats);
+        RideSeats.bind(seats, ride);
 
         MaterialSwitch toggle = row.findViewById(R.id.profileRideShareSwitch);
         if (isOwnProfile) {
@@ -358,26 +363,13 @@ public class ProfileActivity extends AppCompatActivity {
         return value.resourceId;
     }
 
-    private String metaLine(Ride ride, boolean completedList) {
+    private String metaLine(Ride ride) {
         String when = ride.departureTime == null ? "Time TBD"
                 : DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                         .format(ride.departureTime.toDate());
-        String status;
-        if (Ride.STATUS_CANCELLED.equals(ride.status)) {
-            status = "Cancelled";
-        } else if (completedList) {
-            status = "Completed";
-        } else if (RideScheduleService.awaitingCompletion(ride, Timestamp.now())) {
-            status = "Departed, awaiting completion";
-        } else if (Ride.STATUS_DELAYED.equals(ride.status)) {
-            status = "Delayed";
-        } else {
-            status = "On Time";
-        }
-        int riders = ride.participantIds == null ? 0 : ride.participantIds.size();
         String role = targetUserId != null && targetUserId.equals(ride.organizerId)
                 ? (isOwnProfile ? " · You organize" : " · Organizer") : "";
-        return when + " · " + status + " · " + riders + "/" + ride.maxRiders + " riders" + role;
+        return when + role;
     }
 
     private static String addressOf(com.trojanrideshare.app.model.PlaceInfo place) {

@@ -44,6 +44,9 @@ import com.trojanrideshare.app.service.search.SearchService;
 import com.trojanrideshare.app.ui.ride.CreateRideActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.Money;
+import com.trojanrideshare.app.util.RideSeats;
+import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
@@ -534,6 +537,8 @@ public class SearchActivity extends AppCompatActivity {
         ((TextView) item.findViewById(R.id.rideTitle)).setText(
                 emptyFallback(ride.title, getString(R.string.search_untitled_ride))
         );
+        TextView status = item.findViewById(R.id.rideStatus);
+        RideStatusChip.of(ride, Timestamp.now()).applyTo(status);
         ((TextView) item.findViewById(R.id.rideRoute)).setText(getString(
                 R.string.search_route_format,
                 addressOf(ride.origin),
@@ -543,14 +548,11 @@ public class SearchActivity extends AppCompatActivity {
                 R.string.search_departure_format,
                 formatDeparture(ride.departureTime)
         );
-        departure += Ride.STATUS_DELAYED.equals(ride.status) ? " · Delayed (updated time)" : " · On Time";
         ((TextView) item.findViewById(R.id.rideDeparture)).setText(departure);
 
         int availableSeats = ride.getAvailableSeats();
-        ((TextView) item.findViewById(R.id.rideSeats)).setText(availableSeats <= 0
-                ? "Full · " + ride.getRiderCount() + " of " + ride.maxRiders + " riders"
-                : "Open · " + getResources().getQuantityString(
-                        R.plurals.search_available_seats, availableSeats, availableSeats));
+        TextView seats = item.findViewById(R.id.rideSeats);
+        RideSeats.bind(seats, ride);
 
         Button requestButton = item.findViewById(R.id.joinRequestButton);
         TextView requestStatus = item.findViewById(R.id.joinRequestStatus);
@@ -565,6 +567,12 @@ public class SearchActivity extends AppCompatActivity {
             // A pending requester can still cancel from here even if the ride filled up.
             blocked = "Full";
         }
+        TextView costEstimate = item.findViewById(R.id.rideCostEstimate);
+        costEstimate.setText(blocked == null && availableSeats > 0
+                ? getString(R.string.cost_estimate_each_if_you_join,
+                        Money.format(RideSeats.costEachIfJoinedCents(ride)))
+                : getString(R.string.cost_estimate_each,
+                        Money.format(RideSeats.costEachCents(ride))));
         if (blocked != null) {
             // Shown so the blocks are visible, but these can't be requested.
             requestButton.setEnabled(false);

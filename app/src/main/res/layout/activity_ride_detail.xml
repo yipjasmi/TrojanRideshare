@@ -46,6 +46,12 @@
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceHeadlineSmall" />
 
+                <TextView
+                    android:id="@+id/detailStatus"
+                    style="@style/StatusChip"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone" />
+
                 <!-- Opens the organizer's profile; the chevron says it's tappable -->
                 <TextView
                     android:id="@+id/detailOrganizer"
@@ -83,13 +89,6 @@
 
                 <TextView
                     android:id="@+id/detailCost"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium" />
-
-                <TextView
-                    android:id="@+id/detailStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"

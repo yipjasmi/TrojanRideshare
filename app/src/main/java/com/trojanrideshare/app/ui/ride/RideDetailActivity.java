@@ -33,12 +33,14 @@ import com.trojanrideshare.app.service.ride.LeaveRideService;
 import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.Money;
+import com.trojanrideshare.app.util.RideSeats;
+import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Shows a single ride. The organizer gets an Edit entry point; another signed-in student
@@ -150,6 +152,9 @@ public class RideDetailActivity extends AppCompatActivity {
 
         setText(R.id.detailTitle, emptyFallback(
                 ride.title, getString(R.string.search_untitled_ride)));
+        TextView status = findViewById(R.id.detailStatus);
+        RideStatusChip.of(ride, Timestamp.now()).applyTo(status);
+        status.setVisibility(View.VISIBLE);
         setText(R.id.detailOrganizer, getString(
                 R.string.ride_detail_organizer_format,
                 getString(R.string.ride_detail_unknown_organizer)));
@@ -171,12 +176,15 @@ public class RideDetailActivity extends AppCompatActivity {
         setText(R.id.detailDeparture, departureText);
 
         int availableSeats = ride.getAvailableSeats();
-        setText(R.id.detailSeats, ridersLine(ride, availableSeats));
-        setText(R.id.detailCost, getString(
-                R.string.ride_detail_cost_format,
-                String.format(Locale.US, "$%.2f", ride.expectedCost)));
-        setText(R.id.detailStatus, getString(
-                R.string.ride_detail_status_format, statusLine(ride)));
+        TextView seats = findViewById(R.id.detailSeats);
+        RideSeats.bind(seats, ride);
+        String cost = getString(
+                R.string.ride_detail_cost_format, Money.format(Money.toCents(ride.expectedCost)));
+        if (ride.isActive()) {
+            cost += " · " + getString(
+                    R.string.cost_estimate_each, Money.format(RideSeats.costEachCents(ride)));
+        }
+        setText(R.id.detailCost, cost);
 
         renderRiders(ride);
         configureAction(ride, availableSeats);
@@ -520,27 +528,6 @@ public class RideDetailActivity extends AppCompatActivity {
         });
     }
 
-    /** "On Time · Open", "Delayed · Full", or just "Completed"/"Cancelled". */
-    private String statusLine(Ride ride) {
-        String activity = statusLabel(ride.status);
-        if (!ride.isActive()) {
-            return activity;
-        }
-        String capacity = Ride.CAPACITY_FULL.equals(ride.getDerivedCapacityStatus()) ? "Full" : "Open";
-        return activity + " · " + capacity;
-    }
-
-    /** Rider count including the organizer; capacity is N/A once completed or cancelled. */
-    private String ridersLine(Ride ride, int availableSeats) {
-        String count = String.format(Locale.US, "Riders: %d of %d (including organizer)",
-                ride.getRiderCount(), ride.maxRiders);
-        if (!ride.isActive()) {
-            return count;
-        }
-        return count + " · " + getResources().getQuantityString(
-                R.plurals.search_available_seats, availableSeats, availableSeats);
-    }
-
     private void showInfo(String message) {
         infoMessage.setText(message);
         infoMessage.setVisibility(View.VISIBLE);
@@ -555,22 +542,6 @@ public class RideDetailActivity extends AppCompatActivity {
 
     private void setText(int viewId, String text) {
         ((TextView) findViewById(viewId)).setText(text);
-    }
-
-    private String statusLabel(String status) {
-        if (Ride.STATUS_ON_TIME.equals(status)) {
-            return getString(R.string.status_on_time);
-        }
-        if (Ride.STATUS_DELAYED.equals(status)) {
-            return getString(R.string.status_delayed);
-        }
-        if (Ride.STATUS_CANCELLED.equals(status)) {
-            return getString(R.string.status_cancelled);
-        }
-        if (Ride.STATUS_COMPLETED.equals(status)) {
-            return getString(R.string.status_completed);
-        }
-        return getString(R.string.status_unknown);
     }
 
     private String addressOf(PlaceInfo place) {
