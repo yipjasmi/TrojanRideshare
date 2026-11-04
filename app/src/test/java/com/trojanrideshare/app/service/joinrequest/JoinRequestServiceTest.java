@@ -53,6 +53,20 @@ public class JoinRequestServiceTest {
     }
 
     @Test
+    public void submit_rejectsDepartedRide() {
+        Ride departed = availableRide();
+        departed.departureTime = new com.google.firebase.Timestamp(
+                new java.util.Date(System.currentTimeMillis() - 60_000));
+        assertEquals(JoinRequestService.MESSAGE_DEPARTED,
+                JoinRequestService.validationError(departed, REQUESTER_ID, ""));
+
+        Ride upcoming = availableRide();
+        upcoming.departureTime = new com.google.firebase.Timestamp(
+                new java.util.Date(System.currentTimeMillis() + 60 * 60_000));
+        assertNull(JoinRequestService.validationError(upcoming, REQUESTER_ID, ""));
+    }
+
+    @Test
     public void submit_rejectsUnavailableRideAndLongMessage() {
         Ride cancelled = availableRide();
         cancelled.status = Ride.STATUS_CANCELLED;

@@ -153,7 +153,22 @@ public class SearchActivity extends AppCompatActivity {
         findViewById(R.id.clearFiltersButton).setOnClickListener(view -> clearFilters());
 
         loadPendingJoinRequests();
-        search();
+        showSearchPrompt();
+    }
+
+    private void showSearchPrompt() {
+        resultsContainer.removeAllViews();
+        resultMessage.setText("Enter an origin and a destination keyword, then tap Search.");
+        resultMessage.setVisibility(View.VISIBLE);
+    }
+
+    private void showPreferredLocation(boolean isOrigin, PlaceInfo selected) {
+        Button button = findViewById(isOrigin ? R.id.selectOriginButton : R.id.selectDestinationButton);
+        if (selected == null) {
+            button.setText(isOrigin ? R.string.search_select_origin : R.string.search_select_destination);
+        } else {
+            button.setText((isOrigin ? "Origin point: " : "Destination point: ") + selected.address);
+        }
     }
 
     private void bindViews() {
@@ -181,8 +196,10 @@ public class SearchActivity extends AppCompatActivity {
 
     private void launchPlacePicker(ActivityResultLauncher<Intent> launcher) {
         com.trojanrideshare.app.util.PlacesLocationPicker.show(this, selected -> {
-            if (launcher == originPicker) { preferredOrigin = selected; originInput.setText(selected.address); }
-            else { preferredDestination = selected; destinationInput.setText(selected.address); }
+            // The picked point drives the radius filter and proximity sort; the keyword inputs
+            // stay as typed so both filters apply independently.
+            if (launcher == originPicker) { preferredOrigin = selected; showPreferredLocation(true, selected); }
+            else { preferredDestination = selected; showPreferredLocation(false, selected); }
         });
     }
 
@@ -202,11 +219,10 @@ public class SearchActivity extends AppCompatActivity {
             selected.lng = coordinates.longitude;
             if (isOrigin) {
                 preferredOrigin = selected;
-                originInput.setText(selected.address);
             } else {
                 preferredDestination = selected;
-                destinationInput.setText(selected.address);
             }
+            showPreferredLocation(isOrigin, selected);
         } else if (resultCode == AutocompleteActivity.RESULT_ERROR && data != null) {
             Status status = Autocomplete.getStatusFromIntent(data);
             String message = status.getStatusMessage();
@@ -282,7 +298,20 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     private void search() {
-        refreshSelectedLocations();
+        String keywordError = SearchService.keywordError(
+                originInput.getText().toString(), destinationInput.getText().toString());
+        if (keywordError != null) {
+            if (originInput.getText().toString().trim().isEmpty()) {
+                originInput.setError("Origin keyword is required");
+            }
+            if (destinationInput.getText().toString().trim().isEmpty()) {
+                destinationInput.setError("Destination keyword is required");
+            }
+            resultsContainer.removeAllViews();
+            resultMessage.setText(keywordError);
+            resultMessage.setVisibility(View.VISIBLE);
+            return;
+        }
         if (startDateMillis != null && endDateMillis != null
                 && endDateMillis < startDateMillis) {
             Toast.makeText(this, R.string.search_invalid_date_range, Toast.LENGTH_LONG).show();
@@ -347,17 +376,6 @@ public class SearchActivity extends AppCompatActivity {
         );
     }
 
-    private void refreshSelectedLocations() {
-        if (preferredOrigin != null
-                && !sameText(originInput.getText().toString(), preferredOrigin.address)) {
-            preferredOrigin = null;
-        }
-        if (preferredDestination != null
-                && !sameText(destinationInput.getText().toString(), preferredDestination.address)) {
-            preferredDestination = null;
-        }
-    }
-
     private SortOption selectedSortOption() {
         switch (sortSpinner.getSelectedItemPosition()) {
             case 1:
@@ -388,8 +406,12 @@ public class SearchActivity extends AppCompatActivity {
         maximumDistanceInput.setError(null);
         minimumSeatsSpinner.setSelection(0);
         sortSpinner.setSelection(0);
+        originInput.setError(null);
+        destinationInput.setError(null);
+        showPreferredLocation(true, null);
+        showPreferredLocation(false, null);
         updateTimeButtons();
-        search();
+        showSearchPrompt();
     }
 
     private void setLoading(boolean loading) {
@@ -428,10 +450,12 @@ public class SearchActivity extends AppCompatActivity {
                 addressOf(ride.origin),
                 addressOf(ride.destination)
         ));
-        ((TextView) item.findViewById(R.id.rideDeparture)).setText(getString(
+        String departure = getString(
                 R.string.search_departure_format,
                 formatDeparture(ride.departureTime)
-        ));
+        );
+        departure += Ride.STATUS_DELAYED.equals(ride.status) ? " · Delayed (updated time)" : " · On Time";
+        ((TextView) item.findViewById(R.id.rideDeparture)).setText(departure);
 
         int availableSeats = ride.getAvailableSeats();
         ((TextView) item.findViewById(R.id.rideSeats)).setText(getResources()

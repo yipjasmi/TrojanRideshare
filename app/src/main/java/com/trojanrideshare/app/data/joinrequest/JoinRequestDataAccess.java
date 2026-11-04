@@ -1,5 +1,6 @@
 package com.trojanrideshare.app.data.joinrequest;
 
+import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -43,6 +44,9 @@ public class JoinRequestDataAccess implements JoinRequestRepository {
             DocumentSnapshot requestSnapshot = transaction.get(requestReference);
             Ride currentRide = rideSnapshot.toObject(Ride.class);
 
+            if (currentRide != null && currentRide.hasDeparted(Timestamp.now())) {
+                throw new SubmissionException(Failure.RIDE_DEPARTED);
+            }
             if (!isAvailable(currentRide, request.requesterId)) {
                 throw new SubmissionException(Failure.RIDE_UNAVAILABLE);
             }
@@ -197,6 +201,10 @@ public class JoinRequestDataAccess implements JoinRequestRepository {
             if (!Ride.STATUS_ON_TIME.equals(ride.status)
                     && !Ride.STATUS_DELAYED.equals(ride.status)) {
                 throw new SubmissionException(Failure.RIDE_UNAVAILABLE);
+            }
+            // Acceptances stop at departure (the delayed time for a Delayed ride).
+            if (ride.hasDeparted(Timestamp.now())) {
+                throw new SubmissionException(Failure.RIDE_DEPARTED);
             }
 
             List<String> participants = ride.participantIds == null

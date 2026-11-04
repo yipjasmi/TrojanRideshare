@@ -10,6 +10,7 @@ public interface JoinRequestRepository {
     enum Failure {
         DUPLICATE_REQUEST,
         RIDE_UNAVAILABLE,
+        RIDE_DEPARTED,
         REQUEST_NOT_PENDING,
         NOT_AUTHORIZED,
         RIDE_FULL

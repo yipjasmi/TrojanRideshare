@@ -1,13 +1,13 @@
 <resources>
     <string name="app_name">TrojanRideshare</string>
     <string name="search_title">Find a ride</string>
-    <string name="search_subtitle">Search open rides, then narrow the results with optional filters.</string>
+    <string name="search_subtitle">Shows On Time and Delayed rides with open seats that haven\'t departed. Both keywords are required; the other filters are optional.</string>
     <string name="search_route_section">Route</string>
     <string name="search_filters_section">Filters and sorting</string>
-    <string name="search_origin_hint">Origin keyword</string>
-    <string name="search_destination_hint">Destination keyword</string>
-    <string name="search_select_origin">Choose preferred origin</string>
-    <string name="search_select_destination">Choose preferred destination</string>
+    <string name="search_origin_hint">Origin keyword (required)</string>
+    <string name="search_destination_hint">Destination keyword (required)</string>
+    <string name="search_select_origin">Pick origin point for distance (optional)</string>
+    <string name="search_select_destination">Pick destination point for distance (optional)</string>
     <string name="search_date_label">Departure date range (optional)</string>
     <string name="search_any_start_date">Any start date</string>
     <string name="search_any_end_date">Any end date</string>
@@ -15,7 +15,7 @@
     <string name="search_start_time">Start: %1$s</string>
     <string name="search_end_time">End: %1$s</string>
     <string name="search_seats_label">Minimum available seats</string>
-    <string name="search_distance_filter">Limit distance from both preferred locations</string>
+    <string name="search_distance_filter">Within this radius of both picked points</string>
     <string name="search_distance_hint">Maximum distance (miles)</string>
     <string name="search_sort_label">Sort results by</string>
     <string name="search_clear_filters">Clear filters</string>
@@ -53,8 +53,8 @@
     <string name="main_search_action">Find rides</string>
     <string name="main_manage_requests_action">Manage join requests</string>
     <string name="back">Back</string>
-    <string name="organizer_requests_title">Join requests</string>
-    <string name="organizer_requests_subtitle">Accepting a rider fills one available seat. Rejecting a request does not change the seat count.</string>
+    <string name="organizer_requests_title">Requests for my rides</string>
+    <string name="organizer_requests_subtitle">Accepting a rider fills one seat (the organizer counts as a rider). When a ride is full, other pending requests stay pending but can\'t be accepted until a seat opens. Acceptances stop at departure.</string>
     <string name="organizer_requests_empty">You have no pending join requests.</string>
     <string name="organizer_request_rider">Rider: %1$s</string>
     <string name="organizer_request_message">Message: %1$s</string>
@@ -138,8 +138,8 @@
     <string-array name="search_sort_options">
         <item>Earliest departure</item>
         <item>Latest departure</item>
-        <item>Closest route</item>
-        <item>Closest route + earliest</item>
+        <item>Closest route (both ends)</item>
+        <item>Closest route, then earliest (ties within 0.5 mi)</item>
     </string-array>
     <plurals name="search_available_seats">
         <item quantity="one">%d seat available</item>

@@ -43,6 +43,8 @@ public class JoinRequestService {
     }
 
     private static final int MAXIMUM_MESSAGE_LENGTH = 250;
+    public static final String MESSAGE_DEPARTED =
+            "This ride has already departed. New requests and acceptances are closed.";
     private final JoinRequestRepository repository;
     // Null in the unit-test constructor so tests do not touch Firebase; notifications are
     // then skipped (they are best-effort anyway).
@@ -94,6 +96,8 @@ public class JoinRequestService {
             public void onFailure(JoinRequestRepository.Failure failure) {
                 if (failure == JoinRequestRepository.Failure.DUPLICATE_REQUEST) {
                     callback.onAlreadyRequested();
+                } else if (failure == JoinRequestRepository.Failure.RIDE_DEPARTED) {
+                    callback.onError(MESSAGE_DEPARTED);
                 } else {
                     callback.onError("This ride is no longer available.");
                 }
@@ -267,6 +271,9 @@ public class JoinRequestService {
     }
 
     private static String decisionFailureMessage(JoinRequestRepository.Failure failure) {
+        if (failure == JoinRequestRepository.Failure.RIDE_DEPARTED) {
+            return MESSAGE_DEPARTED;
+        }
         if (failure == JoinRequestRepository.Failure.RIDE_FULL) {
             return "This ride is already full.";
         }
@@ -298,6 +305,10 @@ public class JoinRequestService {
                 : ride.participantIds;
         if (participants.contains(requesterId)) {
             return "You have already joined this ride.";
+        }
+        // Policy: requests are allowed right up to departure (no three-hour cutoff for joining).
+        if (ride.hasDeparted(Timestamp.now())) {
+            return MESSAGE_DEPARTED;
         }
         if (ride.getAvailableSeats() == 0) {
             return "This ride has no available seats.";

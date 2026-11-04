@@ -299,7 +299,9 @@ public class ProfileActivity extends AppCompatActivity {
                 status = "On Time";
             }
             int riders = ride.participantIds == null ? 0 : ride.participantIds.size();
-            return when + " · " + status + " · " + riders + "/" + ride.maxRiders + " riders";
+            String role = targetUserId != null && targetUserId.equals(ride.organizerId)
+                    ? (isOwnProfile ? " · You organize" : " · Organizer") : "";
+            return when + " · " + status + " · " + riders + "/" + ride.maxRiders + " riders" + role;
         }
     }
 
