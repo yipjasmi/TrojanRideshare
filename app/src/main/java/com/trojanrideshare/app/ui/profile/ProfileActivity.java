@@ -127,6 +127,9 @@ public class ProfileActivity extends AppCompatActivity {
             BottomNavHelper.setupBottomNav(this, R.id.nav_profile);
         } else {
             titleTextView.setText("User Profile");
+            com.google.android.material.tabs.TabLayout otherTabs = findViewById(R.id.profileRideTabs);
+            com.google.android.material.tabs.TabLayout.Tab organizedTab = otherTabs.getTabAt(0);
+            if (organizedTab != null) organizedTab.setText("Organized");
             editNicknameButton.setVisibility(View.GONE);
             signOutButton.setVisibility(View.GONE);
             emailTextView.setVisibility(View.GONE);
