@@ -17,6 +17,7 @@ import com.google.android.libraries.places.widget.AutocompleteActivity;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
 import com.trojanrideshare.app.BuildConfig;
 import com.trojanrideshare.app.R;
+import com.trojanrideshare.app.data.user.UserDataAccess;
 import com.trojanrideshare.app.model.*;
 import com.trojanrideshare.app.service.history.HistoryService;
 import com.trojanrideshare.app.util.BottomNavHelper;
@@ -34,6 +35,11 @@ public class HistoryActivity extends AppCompatActivity {
     private EditText origin, destination, radius, year;
     private Spinner status, sort, participant, month;
     private final List<String> participantIds = new ArrayList<>();
+    private final Map<String, String> participantNames = new HashMap<>();
+    private final UserDataAccess userDataAccess = new UserDataAccess();
+    /** Used when a point is picked for a radius search but no radius is typed. */
+    private static final double DEFAULT_RADIUS_MILES = 5.0;
+    public static final String NO_ACTIVITY_MESSAGE = "No activity! Please select another month.";
     private PlaceInfo originCenter, destinationCenter;
     private boolean pickingOrigin;
     private final ActivityResultLauncher<Intent> picker = registerForActivityResult(
@@ -70,12 +76,14 @@ public class HistoryActivity extends AppCompatActivity {
         BottomNavHelper.setupBottomNav(this, R.id.nav_history);
         content = findViewById(R.id.historyContent);
         label("Ride history", 26);
-        label("Past rides and completed or cancelled trips. Monthly totals use completed rides and your own assigned shares.", 14);
-        origin = input("Search origin", false); destination = input("Search destination", false);
-        button("Choose origin for radius", () -> choosePlace(true));
-        button("Choose destination for radius", () -> choosePlace(false));
-        radius = input("Optional radius in miles", true);
-        status = spinner(new String[]{"All statuses", "On time", "Delayed", "Cancelled", "Completed"});
+        label("Completed and cancelled rides you took part in. Every search input is optional: "
+            + "type an origin and/or destination keyword, or pick a point to search by radius "
+            + "(default " + (int) DEFAULT_RADIUS_MILES + " miles).", 14);
+        origin = input("Origin keyword (optional)", false); destination = input("Destination keyword (optional)", false);
+        button("Pick origin point for radius", () -> choosePlace(true));
+        button("Pick destination point for radius", () -> choosePlace(false));
+        radius = input("Radius in miles (default " + (int) DEFAULT_RADIUS_MILES + ")", true);
+        status = spinner(new String[]{"Completed and cancelled", "Completed", "Cancelled"});
         sort = spinner(new String[]{"Newest first", "Oldest first"});
         participant = spinner(new String[]{"All participants"});
         button("Apply history filters", this::render);
@@ -122,9 +130,32 @@ public class HistoryActivity extends AppCompatActivity {
         for (Ride ride : rides) others.addAll(ride.getAllParticipantIds());
         others.remove(uid); participantIds.clear(); participantIds.add(""); participantIds.addAll(others);
         List<String> labels = new ArrayList<>(); labels.add("All participants");
-        for (String id : others) labels.add("Participant UID: " + id);
+        for (String id : others) labels.add(participantLabel(id));
         participant.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
         participant.setSelection(Math.max(0, participantIds.indexOf(selected)));
+        for (String id : others) {
+            if (participantNames.containsKey(id)) continue;
+            userDataAccess.getById(id, new UserDataAccess.SingleCallback() {
+                public void onSuccess(User user) {
+                    if (user == null || isFinishing() || isDestroyed()) return;
+                    participantNames.put(id, user.getDisplayName());
+                    refreshParticipantLabels();
+                }
+                public void onError(Exception exception) {}
+            });
+        }
+    }
+    private String participantLabel(String id) {
+        String name = participantNames.get(id);
+        return name != null ? "With " + name : "With another student";
+    }
+    /** Relabels the spinner as names arrive, keeping the current selection. */
+    private void refreshParticipantLabels() {
+        int position = participant.getSelectedItemPosition();
+        List<String> labels = new ArrayList<>(); labels.add("All participants");
+        for (int i = 1; i < participantIds.size(); i++) labels.add(participantLabel(participantIds.get(i)));
+        participant.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
+        participant.setSelection(Math.max(0, position));
     }
     private void render() {
         if (uid == null) return;
@@ -134,14 +165,15 @@ public class HistoryActivity extends AppCompatActivity {
         if (originCenter != null && !f.origin.equals(originCenter.address)) originCenter = null;
         if (destinationCenter != null && !f.destination.equals(destinationCenter.address)) destinationCenter = null;
         f.originCenter = originCenter; f.destinationCenter = destinationCenter;
-        f.status = new String[]{"", Ride.STATUS_ON_TIME, Ride.STATUS_DELAYED,
-            Ride.STATUS_CANCELLED, Ride.STATUS_COMPLETED}[status.getSelectedItemPosition()];
+        f.status = new String[]{"", Ride.STATUS_COMPLETED,
+            Ride.STATUS_CANCELLED}[status.getSelectedItemPosition()];
         f.oldestFirst = sort.getSelectedItemPosition() == 1;
         int index = participant.getSelectedItemPosition();
         f.participantId = index >= 0 && index < participantIds.size() ? participantIds.get(index) : "";
         try {
             String value = radius.getText().toString().trim();
             if (!value.isEmpty()) f.radiusMiles = Double.parseDouble(value);
+            else if (originCenter != null || destinationCenter != null) f.radiusMiles = DEFAULT_RADIUS_MILES;
             List<Ride> displayed = HistoryService.filter(rides, uid, f, System.currentTimeMillis());
             results.removeAllViews();
             message.setText(displayed.isEmpty() ? "No rides match your history filters." : displayed.size() + " rides");
@@ -149,7 +181,11 @@ public class HistoryActivity extends AppCompatActivity {
                 TextView row = new TextView(this); row.setTextSize(16); row.setPadding(0, 20, 0, 20);
                 String text = fallback(ride.title, "Ride") + "\n" + address(ride.origin) + " → " + address(ride.destination)
                     + "\n" + DateFormat.getDateTimeInstance().format(ride.departureTime.toDate())
-                    + "\nStatus: " + statusLabel(ride.status) + " · Participants: " + ride.getAllParticipantIds().size();
+                    + "\nStatus: " + statusLabel(ride.status) + " · Participants: " + ride.getAllParticipantIds().size()
+                    + (uid.equals(ride.organizerId) ? " · You organized" : "");
+                if (ride.completedAt != null) {
+                    text += "\nMarked completed " + DateFormat.getDateTimeInstance().format(ride.completedAt.toDate());
+                }
                 if (Ride.STATUS_COMPLETED.equals(ride.status)) {
                     Payment p = payments.get(ride.id);
                     text += p == null ? "\nYour share: not assigned yet" : "\nYour share: "
@@ -167,9 +203,10 @@ public class HistoryActivity extends AppCompatActivity {
             int selectedYear = Integer.parseInt(year.getText().toString().trim());
             if (selectedYear < 1 || selectedYear > 9999) throw new NumberFormatException();
             MonthlySummary s = HistoryService.summarize(rides, payments, uid, selectedYear, month.getSelectedItemPosition() + 1);
-            summary.setText(s.completedRides == 0 ? "No completed rides this month.\nTotal assigned cost: $0.00"
-                : "Completed: " + s.completedRides + " · Owned: " + s.ownedRides + " · Joined: " + s.joinedRides
+            summary.setText(!s.hasActivity() ? NO_ACTIVITY_MESSAGE
+                : "Completed rides: " + s.completedRides + "\nOrganized: " + s.ownedRides + " · Joined: " + s.joinedRides
                 + "\nYour total assigned cost: " + Money.format(s.totalCostCents)
+                + "\n  Paid: " + Money.format(s.paidCostCents) + " · Unpaid: " + Money.format(s.unpaidCostCents)
                 + (s.unassignedShares == 0 ? "" : "\n" + s.unassignedShares + " ride(s) awaiting your cost share; total is incomplete."));
         } catch (NumberFormatException error) { year.setError("Enter a year from 1 to 9999"); }
     }
@@ -197,6 +234,9 @@ public class HistoryActivity extends AppCompatActivity {
     private static String fallback(String value, String fallback) { return value == null || value.isEmpty() ? fallback : value; }
     private static String address(PlaceInfo p) { return p == null ? "Unknown location" : fallback(p.address, "Unknown location"); }
     private static String statusLabel(String value) {
+        if (Ride.STATUS_COMPLETED.equals(value)) return "Completed";
+        if (Ride.STATUS_CANCELLED.equals(value)) return "Cancelled";
+        if (Ride.STATUS_DELAYED.equals(value)) return "Delayed";
         if (Ride.STATUS_ON_TIME.equals(value)) return "On time";
         return fallback(value, "Unknown");
     }

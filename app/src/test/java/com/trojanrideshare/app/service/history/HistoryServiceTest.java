@@ -32,6 +32,27 @@ public class HistoryServiceTest {
         Ride missing = ride("m",2026,10,1,UID,"completed"); missing.departureTime = null;
         assertEquals(0,HistoryService.filter(Arrays.asList(other,future,missing),UID,new HistoryFilter(),0).size());
     }
+    @Test public void departedRideAwaitingCompletionIsNotHistory() {
+        Ride departed = ride("d",2026,10,1,UID,"onTime");
+        Ride delayed = ride("x",2026,10,1,UID,"delayed");
+        Ride cancelled = ride("c",2026,10,1,UID,"cancelled");
+        assertEquals(Collections.singletonList(cancelled),
+            HistoryService.filter(Arrays.asList(departed,delayed,cancelled),UID,new HistoryFilter(),Long.MAX_VALUE));
+    }
+    @Test public void summarySplitsPaidAndUnpaidAndUsesScheduledMonth() {
+        Ride paid = ride("p",2026,10,5,UID,"completed");
+        Ride unpaid = ride("u",2026,10,20,"other","completed");
+        // Scheduled in October but marked completed in November: counts for October.
+        unpaid.completedAt = new Timestamp(new Date(paid.departureTime.toDate().getTime() + 40L*24*3600*1000));
+        Map<String,Payment> payments = new HashMap<>();
+        Payment a = new Payment(); a.userId = UID; a.amount = 10.00; a.paid = true; payments.put("p",a);
+        Payment b = new Payment(); b.userId = UID; b.amount = 3.33; b.paid = false; payments.put("u",b);
+        MonthlySummary s = HistoryService.summarize(Arrays.asList(paid,unpaid),payments,UID,2026,10);
+        assertTrue(s.hasActivity());
+        assertEquals(1333L,s.totalCostCents); assertEquals(1000L,s.paidCostCents); assertEquals(333L,s.unpaidCostCents);
+        assertEquals(1,s.ownedRides); assertEquals(1,s.joinedRides);
+        assertFalse(HistoryService.summarize(Arrays.asList(paid,unpaid),payments,UID,2026,11).hasActivity());
+    }
     @Test public void organizerIncludedWithoutParticipantEntry() {
         Ride r = ride("a",2026,10,1,UID,"completed"); r.participantIds.clear();
         assertEquals(1,HistoryService.filter(Arrays.asList(r),UID,new HistoryFilter(),0).size());

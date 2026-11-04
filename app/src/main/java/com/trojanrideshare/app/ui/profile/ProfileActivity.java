@@ -52,6 +52,7 @@ public class ProfileActivity extends AppCompatActivity {
     private TextView uscIdTextView;
     private TextView gradYearTextView;
     private TextView sharingHintTextView;
+    private TextView flagTextView;
     private TextView upcomingHeaderTextView;
     private TextView completedHeaderTextView;
     private TextView upcomingEmptyTextView;
@@ -93,6 +94,7 @@ public class ProfileActivity extends AppCompatActivity {
         uscIdTextView = findViewById(R.id.profileUscIdTextView);
         gradYearTextView = findViewById(R.id.profileGradYearTextView);
         sharingHintTextView = findViewById(R.id.profileSharingHintTextView);
+        flagTextView = findViewById(R.id.profileFlagTextView);
         upcomingHeaderTextView = findViewById(R.id.profileUpcomingHeader);
         completedHeaderTextView = findViewById(R.id.profileCompletedHeader);
         upcomingEmptyTextView = findViewById(R.id.upcomingRidesEmptyTextView);
@@ -152,9 +154,35 @@ public class ProfileActivity extends AppCompatActivity {
                     uscIdTextView.setText("USC ID: " + (profileUser.uscId != null ? profileUser.uscId : "N/A"));
                     gradYearTextView.setText("Expected Graduation: " + profileUser.gradYear);
                     loadUserRides();
+                    loadFlags();
                 })
                 .addOnFailureListener(e ->
                         Toast.makeText(this, "Failed to load profile", Toast.LENGTH_SHORT).show());
+    }
+
+    /** Shows a warning when an organizer has flagged one of this user's unpaid shares. */
+    private void loadFlags() {
+        db.collection("payments")
+                .whereEqualTo("userId", targetUserId)
+                .whereEqualTo("flagged", true)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    List<String> rides = new ArrayList<>();
+                    snapshot.getDocuments().forEach(doc -> {
+                        String title = doc.getString("rideTitle");
+                        rides.add(title == null || title.trim().isEmpty() ? "a ride" : title.trim());
+                    });
+                    if (rides.isEmpty()) {
+                        flagTextView.setVisibility(View.GONE);
+                        return;
+                    }
+                    String who = isOwnProfile ? "You have " : "Has ";
+                    flagTextView.setText("⚠ Flagged: " + who + rides.size()
+                            + (rides.size() == 1 ? " unpaid share" : " unpaid shares")
+                            + " (" + android.text.TextUtils.join(", ", rides) + ")");
+                    flagTextView.setVisibility(View.VISIBLE);
+                })
+                .addOnFailureListener(e -> flagTextView.setVisibility(View.GONE));
     }
 
     private void showEditNicknameDialog() {

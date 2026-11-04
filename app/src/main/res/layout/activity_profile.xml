@@ -62,6 +62,16 @@
             android:text="Graduation Year: --"
             android:textSize="14sp" />
 
+        <TextView
+            android:id="@+id/profileFlagTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#B3261E"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
         <Button
             android:id="@+id/profileEditNicknameButton"
             android:layout_width="wrap_content"
