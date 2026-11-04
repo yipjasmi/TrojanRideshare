@@ -42,11 +42,16 @@ public class PlacePickerActivity extends AppCompatActivity {
     public static final String EXTRA_ADDRESS = "address";
     public static final String EXTRA_LAT = "lat";
     public static final String EXTRA_LNG = "lng";
+    public static final String EXTRA_NAME = "name";
+    public static final String EXTRA_QUERY = "query";
 
     private static final long DEBOUNCE_MS = 300L;
     private static final int MIN_QUERY_LENGTH = 3;
+    private String lastQuery = "";
+
     private static final List<Place.Field> FETCH_FIELDS = Arrays.asList(
             Place.Field.ID,
+            Place.Field.DISPLAY_NAME,
             Place.Field.FORMATTED_ADDRESS,
             Place.Field.LOCATION
     );
@@ -103,6 +108,7 @@ public class PlacePickerActivity extends AppCompatActivity {
     }
 
     private void runQuery(String query) {
+        lastQuery = query;
         FindAutocompletePredictionsRequest request =
                 FindAutocompletePredictionsRequest.builder()
                         .setSessionToken(sessionToken)
@@ -130,12 +136,13 @@ public class PlacePickerActivity extends AppCompatActivity {
             ((TextView) row.findViewById(R.id.predictionSecondary))
                     .setText(prediction.getSecondaryText(null));
             String placeId = prediction.getPlaceId();
-            row.setOnClickListener(v -> fetchAndReturn(placeId));
+            String primaryText = prediction.getPrimaryText(null).toString();
+            row.setOnClickListener(v -> fetchAndReturn(placeId, primaryText));
             resultsContainer.addView(row);
         }
     }
 
-    private void fetchAndReturn(String placeId) {
+    private void fetchAndReturn(String placeId, String primaryText) {
         FetchPlaceRequest request = FetchPlaceRequest.builder(placeId, FETCH_FIELDS)
                 .setSessionToken(sessionToken)
                 .build();
@@ -145,6 +152,10 @@ public class PlacePickerActivity extends AppCompatActivity {
                     Intent data = new Intent();
                     data.putExtra(EXTRA_PLACE_ID, place.getId());
                     data.putExtra(EXTRA_ADDRESS, place.getFormattedAddress());
+                    data.putExtra(EXTRA_NAME, place.getDisplayName() != null
+                            ? place.getDisplayName() : primaryText);
+                    // Saved so a keyword like "USC" still finds a ride picked by street address.
+                    data.putExtra(EXTRA_QUERY, lastQuery);
                     LatLng location = place.getLocation();
                     if (location != null) {
                         data.putExtra(EXTRA_LAT, location.latitude);

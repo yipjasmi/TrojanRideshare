@@ -68,8 +68,15 @@ public class SearchActivity extends AppCompatActivity {
     private Button endTimeButton;
     private CheckBox timeFilterCheckBox;
     private CheckBox distanceFilterCheckBox;
-    private Spinner minimumSeatsSpinner;
+    /** 0 means any. A ride has at most 5 open seats (6 riders including the organizer). */
+    private static final int MAX_SEATS_FILTER = 5;
+    private int minimumSeats = 0;
+    private TextView seatsValueText;
+    private Button seatsDecreaseButton;
+    private Button seatsIncreaseButton;
     private Spinner sortSpinner;
+    private CheckBox statusOnTimeCheckBox;
+    private CheckBox statusDelayedCheckBox;
     private ProgressBar loadingIndicator;
     private TextView resultMessage;
     private LinearLayout resultsContainer;
@@ -78,21 +85,18 @@ public class SearchActivity extends AppCompatActivity {
     private final Set<String> requestedRideIds = new HashSet<>();
     private List<Ride> displayedRides = Collections.emptyList();
 
+    // Map points looked up from the typed origin/destination, and the text each was found for.
     private PlaceInfo preferredOrigin;
     private PlaceInfo preferredDestination;
+    private String originResolvedFor;
+    private double searchRadiusMiles;
+    private String destinationResolvedFor;
+    private TextView originResolvedText;
+    private TextView destinationResolvedText;
     private Long startDateMillis;
     private Long endDateMillis;
     private int startTimeMinute;
     private int endTimeMinute = 23 * 60 + 59;
-
-    private final ActivityResultLauncher<Intent> originPicker = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> handlePlaceResult(result.getResultCode(), result.getData(), true)
-    );
-    private final ActivityResultLauncher<Intent> destinationPicker = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> handlePlaceResult(result.getResultCode(), result.getData(), false)
-    );
 
     private String getCurrentUserId() {
         String userId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
@@ -132,12 +136,8 @@ public class SearchActivity extends AppCompatActivity {
             });
         }
 
-        findViewById(R.id.selectOriginButton).setOnClickListener(
-                view -> launchPlacePicker(originPicker)
-        );
-        findViewById(R.id.selectDestinationButton).setOnClickListener(
-                view -> launchPlacePicker(destinationPicker)
-        );
+        originResolvedText.setOnClickListener(view -> changeResolvedPlace(true));
+        destinationResolvedText.setOnClickListener(view -> changeResolvedPlace(false));
         startDateButton.setOnClickListener(view -> showDatePicker(true));
         endDateButton.setOnClickListener(view -> showDatePicker(false));
         startTimeButton.setOnClickListener(view -> showTimePicker(true));
@@ -153,22 +153,7 @@ public class SearchActivity extends AppCompatActivity {
         findViewById(R.id.clearFiltersButton).setOnClickListener(view -> clearFilters());
 
         loadPendingJoinRequests();
-        showSearchPrompt();
-    }
-
-    private void showSearchPrompt() {
-        resultsContainer.removeAllViews();
-        resultMessage.setText("Enter an origin and a destination keyword, then tap Search.");
-        resultMessage.setVisibility(View.VISIBLE);
-    }
-
-    private void showPreferredLocation(boolean isOrigin, PlaceInfo selected) {
-        Button button = findViewById(isOrigin ? R.id.selectOriginButton : R.id.selectDestinationButton);
-        if (selected == null) {
-            button.setText(isOrigin ? R.string.search_select_origin : R.string.search_select_destination);
-        } else {
-            button.setText((isOrigin ? "Origin point: " : "Destination point: ") + selected.address);
-        }
+        search();
     }
 
     private void bindViews() {
@@ -181,8 +166,17 @@ public class SearchActivity extends AppCompatActivity {
         endTimeButton = findViewById(R.id.endTimeButton);
         timeFilterCheckBox = findViewById(R.id.timeFilterCheckBox);
         distanceFilterCheckBox = findViewById(R.id.distanceFilterCheckBox);
-        minimumSeatsSpinner = findViewById(R.id.minimumSeatsSpinner);
+        originResolvedText = findViewById(R.id.originResolvedText);
+        destinationResolvedText = findViewById(R.id.destinationResolvedText);
+        seatsValueText = findViewById(R.id.seatsValueText);
+        seatsDecreaseButton = findViewById(R.id.seatsDecreaseButton);
+        seatsIncreaseButton = findViewById(R.id.seatsIncreaseButton);
+        seatsDecreaseButton.setOnClickListener(view -> setMinimumSeats(minimumSeats - 1));
+        seatsIncreaseButton.setOnClickListener(view -> setMinimumSeats(minimumSeats + 1));
+        setMinimumSeats(0);
         sortSpinner = findViewById(R.id.sortSpinner);
+        statusOnTimeCheckBox = findViewById(R.id.statusOnTimeCheckBox);
+        statusDelayedCheckBox = findViewById(R.id.statusDelayedCheckBox);
         loadingIndicator = findViewById(R.id.searchLoadingIndicator);
         resultMessage = findViewById(R.id.searchResultMessage);
         resultsContainer = findViewById(R.id.searchResultsContainer);
@@ -194,44 +188,86 @@ public class SearchActivity extends AppCompatActivity {
         }
     }
 
-    private void launchPlacePicker(ActivityResultLauncher<Intent> launcher) {
-        com.trojanrideshare.app.util.PlacesLocationPicker.show(this, selected -> {
-            // The picked point drives the radius filter and proximity sort; the keyword inputs
-            // stay as typed so both filters apply independently.
-            if (launcher == originPicker) { preferredOrigin = selected; showPreferredLocation(true, selected); }
-            else { preferredDestination = selected; showPreferredLocation(false, selected); }
+    /** Lets the user pick a different place when the looked-up one isn't what they meant. */
+    private void changeResolvedPlace(boolean isOrigin) {
+        String typed = (isOrigin ? originInput : destinationInput).getText().toString().trim();
+        com.trojanrideshare.app.util.PlacesLocationPicker.show(this, typed, selected -> {
+            selected.searchQuery = typed;
+            if (isOrigin) {
+                preferredOrigin = selected;
+                originResolvedFor = typed;
+            } else {
+                preferredDestination = selected;
+                destinationResolvedFor = typed;
+            }
+            search();
         });
     }
 
-    private void handlePlaceResult(int resultCode, Intent data, boolean isOrigin) {
-        if (resultCode == Activity.RESULT_OK && data != null) {
-            Place place = Autocomplete.getPlaceFromIntent(data);
-            LatLng coordinates = place.getLatLng();
-            if (coordinates == null) {
-                Toast.makeText(this, R.string.search_location_error, Toast.LENGTH_LONG).show();
-                return;
-            }
+    private boolean usesPlaces() {
+        return distanceFilterCheckBox.isChecked() || sortSpinner.getSelectedItemPosition() >= 2;
+    }
 
-            PlaceInfo selected = new PlaceInfo();
-            selected.placeId = place.getId();
-            selected.address = place.getFormattedAddress();
-            selected.lat = coordinates.latitude;
-            selected.lng = coordinates.longitude;
-            if (isOrigin) {
-                preferredOrigin = selected;
-            } else {
-                preferredDestination = selected;
-            }
-            showPreferredLocation(isOrigin, selected);
-        } else if (resultCode == AutocompleteActivity.RESULT_ERROR && data != null) {
-            Status status = Autocomplete.getStatusFromIntent(data);
-            String message = status.getStatusMessage();
-            Toast.makeText(
-                    this,
-                    message == null ? getString(R.string.search_location_error) : message,
-                    Toast.LENGTH_LONG
-            ).show();
+    private void showResolved(boolean isOrigin, PlaceInfo place) {
+        TextView view = isOrigin ? originResolvedText : destinationResolvedText;
+        if (place == null || !usesPlaces()) {
+            view.setVisibility(View.GONE);
+            return;
         }
+        view.setText("📍 Using " + com.trojanrideshare.app.util.PlaceResolver.label(place)
+                + "  (tap to change)");
+        view.setVisibility(View.VISIBLE);
+    }
+
+    /** Looks up each typed place that doesn't already have a point, then runs the search. */
+    private void resolvePlacesThenSearch(String originText, String destinationText) {
+        if (preferredOrigin == null || !originText.equalsIgnoreCase(originResolvedFor)) {
+            setLoading(true);
+            com.trojanrideshare.app.util.PlaceResolver.resolve(this, originText,
+                    new com.trojanrideshare.app.util.PlaceResolver.Callback() {
+                        @Override
+                        public void onResolved(PlaceInfo place) {
+                            preferredOrigin = place;
+                            originResolvedFor = originText;
+                            resolvePlacesThenSearch(originText, destinationText);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            showLookupError(originInput, message);
+                        }
+                    });
+            return;
+        }
+        if (preferredDestination == null || !destinationText.equalsIgnoreCase(destinationResolvedFor)) {
+            setLoading(true);
+            com.trojanrideshare.app.util.PlaceResolver.resolve(this, destinationText,
+                    new com.trojanrideshare.app.util.PlaceResolver.Callback() {
+                        @Override
+                        public void onResolved(PlaceInfo place) {
+                            preferredDestination = place;
+                            destinationResolvedFor = destinationText;
+                            resolvePlacesThenSearch(originText, destinationText);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            showLookupError(destinationInput, message);
+                        }
+                    });
+            return;
+        }
+        showResolved(true, preferredOrigin);
+        showResolved(false, preferredDestination);
+        runSearch();
+    }
+
+    private void showLookupError(EditText input, String message) {
+        setLoading(false);
+        input.setError(message);
+        resultsContainer.removeAllViews();
+        resultMessage.setText(message);
+        resultMessage.setVisibility(View.VISIBLE);
     }
 
     private void showDatePicker(boolean selectingStart) {
@@ -302,10 +338,10 @@ public class SearchActivity extends AppCompatActivity {
                 originInput.getText().toString(), destinationInput.getText().toString());
         if (keywordError != null) {
             if (originInput.getText().toString().trim().isEmpty()) {
-                originInput.setError("Origin keyword is required");
+                originInput.setError("Origin is required");
             }
             if (destinationInput.getText().toString().trim().isEmpty()) {
-                destinationInput.setError("Destination keyword is required");
+                destinationInput.setError("Destination is required");
             }
             resultsContainer.removeAllViews();
             resultMessage.setText(keywordError);
@@ -317,10 +353,22 @@ public class SearchActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.search_invalid_date_range, Toast.LENGTH_LONG).show();
             return;
         }
-        boolean requiresLocations = distanceFilterCheckBox.isChecked()
-                || sortSpinner.getSelectedItemPosition() >= 2;
-        if (requiresLocations && (preferredOrigin == null || preferredDestination == null)) {
-            Toast.makeText(this, R.string.search_locations_required, Toast.LENGTH_LONG).show();
+        originInput.setError(null);
+        destinationInput.setError(null);
+        if (!statusOnTimeCheckBox.isChecked() && !statusDelayedCheckBox.isChecked()) {
+            resultsContainer.removeAllViews();
+            resultMessage.setText("Select On Time, Delayed, or both.");
+            resultMessage.setVisibility(View.VISIBLE);
+            return;
+        }
+        String originText = originInput.getText().toString().trim();
+        String destinationText = destinationInput.getText().toString().trim();
+        if (usesPlaces() && (originText.isEmpty() || destinationText.isEmpty())) {
+            if (originText.isEmpty()) originInput.setError("Origin is required");
+            if (destinationText.isEmpty()) destinationInput.setError("Destination is required");
+            resultsContainer.removeAllViews();
+            resultMessage.setText(R.string.search_locations_required);
+            resultMessage.setVisibility(View.VISIBLE);
             return;
         }
 
@@ -340,19 +388,38 @@ public class SearchActivity extends AppCompatActivity {
             }
         }
 
+        searchRadiusMiles = maximumDistance;
+        if (usesPlaces()) {
+            resolvePlacesThenSearch(originText, destinationText);
+        } else {
+            showResolved(true, null);
+            showResolved(false, null);
+            runSearch();
+        }
+    }
+
+    /**
+     * Radius on: rides are matched by distance from the looked-up places, not by text.
+     * Radius off: rides are matched by the typed words. Proximity sorts use the looked-up
+     * places either way.
+     */
+    private void runSearch() {
+        boolean distanceMode = distanceFilterCheckBox.isChecked();
+        boolean withPlaces = usesPlaces();
         setLoading(true);
         SearchCriteria criteria = new SearchCriteria(
-                originInput.getText().toString(),
-                destinationInput.getText().toString(),
-                preferredOrigin,
-                preferredDestination,
-                maximumDistance,
+                distanceMode ? "" : originInput.getText().toString(),
+                distanceMode ? "" : destinationInput.getText().toString(),
+                withPlaces ? preferredOrigin : null,
+                withPlaces ? preferredDestination : null,
+                distanceMode ? searchRadiusMiles : 0,
                 startDateMillis,
                 endDateMillis,
                 timeFilterCheckBox.isChecked() ? startTimeMinute : null,
                 timeFilterCheckBox.isChecked() ? endTimeMinute : null,
-                minimumSeatsSpinner.getSelectedItemPosition(),
-                selectedSortOption()
+                minimumSeats,
+                selectedSortOption(),
+                selectedStatusFilter()
         );
 
         searchService.search(
@@ -376,6 +443,22 @@ public class SearchActivity extends AppCompatActivity {
         );
     }
 
+    /** Both boxes (or neither, which search() blocks) means no status filter. */
+    private String selectedStatusFilter() {
+        boolean onTime = statusOnTimeCheckBox.isChecked();
+        boolean delayed = statusDelayedCheckBox.isChecked();
+        if (onTime && !delayed) return Ride.STATUS_ON_TIME;
+        if (delayed && !onTime) return Ride.STATUS_DELAYED;
+        return "";
+    }
+
+    private void setMinimumSeats(int value) {
+        minimumSeats = Math.max(0, Math.min(MAX_SEATS_FILTER, value));
+        seatsValueText.setText(minimumSeats == 0 ? "Any" : minimumSeats + "+");
+        seatsDecreaseButton.setEnabled(minimumSeats > 0);
+        seatsIncreaseButton.setEnabled(minimumSeats < MAX_SEATS_FILTER);
+    }
+
     private SortOption selectedSortOption() {
         switch (sortSpinner.getSelectedItemPosition()) {
             case 1:
@@ -394,6 +477,8 @@ public class SearchActivity extends AppCompatActivity {
         destinationInput.setText("");
         preferredOrigin = null;
         preferredDestination = null;
+        originResolvedFor = null;
+        destinationResolvedFor = null;
         startDateMillis = null;
         endDateMillis = null;
         startDateButton.setText(R.string.search_any_start_date);
@@ -404,14 +489,16 @@ public class SearchActivity extends AppCompatActivity {
         distanceFilterCheckBox.setChecked(false);
         maximumDistanceInput.setText("");
         maximumDistanceInput.setError(null);
-        minimumSeatsSpinner.setSelection(0);
+        setMinimumSeats(0);
         sortSpinner.setSelection(0);
+        statusOnTimeCheckBox.setChecked(true);
+        statusDelayedCheckBox.setChecked(true);
         originInput.setError(null);
         destinationInput.setError(null);
-        showPreferredLocation(true, null);
-        showPreferredLocation(false, null);
+        originResolvedText.setVisibility(View.GONE);
+        destinationResolvedText.setVisibility(View.GONE);
         updateTimeButtons();
-        showSearchPrompt();
+        search();
     }
 
     private void setLoading(boolean loading) {
@@ -458,12 +545,31 @@ public class SearchActivity extends AppCompatActivity {
         ((TextView) item.findViewById(R.id.rideDeparture)).setText(departure);
 
         int availableSeats = ride.getAvailableSeats();
-        ((TextView) item.findViewById(R.id.rideSeats)).setText(getResources()
-                .getQuantityString(R.plurals.search_available_seats, availableSeats, availableSeats));
+        ((TextView) item.findViewById(R.id.rideSeats)).setText(availableSeats <= 0
+                ? "Full · " + ride.getRiderCount() + " of " + ride.maxRiders + " riders"
+                : "Open · " + getResources().getQuantityString(
+                        R.plurals.search_available_seats, availableSeats, availableSeats));
 
         Button requestButton = item.findViewById(R.id.joinRequestButton);
         TextView requestStatus = item.findViewById(R.id.joinRequestStatus);
-        if (requestedRideIds.contains(ride.id)) {
+        String currentUserId = getCurrentUserId();
+        String blocked = null;
+        if (currentUserId != null && currentUserId.equals(ride.organizerId)) {
+            blocked = "Your ride";
+        } else if (currentUserId != null && ride.participantIds != null
+                && ride.participantIds.contains(currentUserId)) {
+            blocked = "Joined";
+        } else if (availableSeats <= 0 && !requestedRideIds.contains(ride.id)) {
+            // A pending requester can still cancel from here even if the ride filled up.
+            blocked = "Full";
+        }
+        if (blocked != null) {
+            // Shown so the blocks are visible, but these can't be requested.
+            requestButton.setEnabled(false);
+            requestButton.setText(blocked);
+            requestButton.setOnClickListener(null);
+            requestStatus.setVisibility(View.GONE);
+        } else if (requestedRideIds.contains(ride.id)) {
             showPendingState(ride, requestButton, requestStatus);
         } else {
             showAvailableState(ride, requestButton, requestStatus);

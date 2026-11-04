@@ -93,6 +93,12 @@ public class CreateRideActivity extends AppCompatActivity {
         if (resultCode != RESULT_OK || data == null) {
             return;
         }
+        // Without coordinates, radius search and proximity sorting can't work for this ride.
+        if (!data.hasExtra(PlacePickerActivity.EXTRA_LAT) || !data.hasExtra(PlacePickerActivity.EXTRA_LNG)) {
+            Toast.makeText(this, "That place has no map coordinates. Pick a more specific result.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         PlaceInfo info = toPlaceInfo(data);
         if (isOrigin) {
             origin = info;
@@ -109,6 +115,8 @@ public class CreateRideActivity extends AppCompatActivity {
         info.address = data.getStringExtra(PlacePickerActivity.EXTRA_ADDRESS);
         info.lat = data.getDoubleExtra(PlacePickerActivity.EXTRA_LAT, 0);
         info.lng = data.getDoubleExtra(PlacePickerActivity.EXTRA_LNG, 0);
+        info.name = data.getStringExtra(PlacePickerActivity.EXTRA_NAME);
+        info.searchQuery = data.getStringExtra(PlacePickerActivity.EXTRA_QUERY);
         return info;
     }
 

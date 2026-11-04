@@ -12,7 +12,7 @@ import java.util.List;
  *
  * <p>Only the organizer completes a ride (after departure), so a ride counts as completed only
  * once its status is "completed". A departed ride that hasn't been completed yet stays in
- * upcoming. Cancelled rides appear in neither list.
+ * upcoming. Cancelled rides go in the completed (past) list and are labeled Cancelled.
  */
 public class RideScheduleService {
     public interface Callback {
@@ -58,7 +58,7 @@ public class RideScheduleService {
         });
     }
 
-    /** Partitions rides into upcoming vs completed; cancelled rides are excluded from both. */
+    /** Partitions rides into upcoming vs past; past holds completed and (labeled) cancelled rides. */
     public static Schedule partition(List<Ride> rides, Timestamp now) {
         List<Ride> upcoming = new ArrayList<>();
         List<Ride> completed = new ArrayList<>();
@@ -66,10 +66,10 @@ public class RideScheduleService {
             return new Schedule(upcoming, completed);
         }
         for (Ride ride : rides) {
-            if (ride == null || Ride.STATUS_CANCELLED.equals(ride.status)) {
+            if (ride == null) {
                 continue;
             }
-            if (Ride.STATUS_COMPLETED.equals(ride.status)) {
+            if (Ride.STATUS_COMPLETED.equals(ride.status) || Ride.STATUS_CANCELLED.equals(ride.status)) {
                 completed.add(ride);
             } else {
                 upcoming.add(ride);

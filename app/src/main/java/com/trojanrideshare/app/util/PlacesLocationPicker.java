@@ -17,6 +17,11 @@ public final class PlacesLocationPicker {
     public interface Callback { void onSelected(PlaceInfo location); }
 
     public static void show(AppCompatActivity activity, Callback callback) {
+        show(activity, null, callback);
+    }
+
+    /** Opens the picker with {@code initialQuery} already typed in the search box. */
+    public static void show(AppCompatActivity activity, String initialQuery, Callback callback) {
         if (BuildConfig.PLACES_API_KEY.trim().isEmpty()) {
             Toast.makeText(activity, "Add PLACES_API_KEY to local.properties and rebuild.", Toast.LENGTH_LONG).show();
             return;
@@ -29,6 +34,7 @@ public final class PlacesLocationPicker {
         int padding = (int) (20 * activity.getResources().getDisplayMetrics().density);
         panel.setPadding(padding, padding, padding, padding);
         EditText query = new EditText(activity); query.setSingleLine(true); query.setHint("Enter a place, such as USC Village");
+        if (initialQuery != null) query.setText(initialQuery.trim());
         panel.addView(query);
         TextView state = new TextView(activity); state.setText("Enter a location, then tap Search."); panel.addView(state);
         TextView attribution = new TextView(activity); attribution.setText("Google Maps"); panel.addView(attribution);
@@ -58,7 +64,7 @@ public final class PlacesLocationPicker {
                             for (int i=0; i<options.getChildCount(); i++) options.getChildAt(i).setEnabled(false);
                             state.setText("Loading selected location...");
                             FetchPlaceRequest details = FetchPlaceRequest.builder(prediction.getPlaceId(),
-                                Arrays.asList(Place.Field.ID, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION))
+                                Arrays.asList(Place.Field.ID, Place.Field.DISPLAY_NAME, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION))
                                 .setSessionToken(token).build();
                             client.fetchPlace(details).addOnSuccessListener(activity, responseDetails -> {
                                 if (!dialog.isShowing()) return;
@@ -71,6 +77,9 @@ public final class PlacesLocationPicker {
                                 value.address = place.getFormattedAddress();
                                 if (value.address == null) value.address = prediction.getFullText(null).toString();
                                 value.lat = place.getLocation().latitude; value.lng = place.getLocation().longitude;
+                                value.name = place.getDisplayName() != null ? place.getDisplayName()
+                                    : prediction.getPrimaryText(null).toString();
+                                value.searchQuery = text;
                                 dialog.dismiss(); callback.onSelected(value);
                             }).addOnFailureListener(activity, error -> {
                                 if (!dialog.isShowing()) return;

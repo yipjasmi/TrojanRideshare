@@ -51,7 +51,7 @@ public class SearchServiceTest {
     }
 
     @Test
-    public void filterRides_excludesInvalidDiscoveryResults() {
+    public void filterRides_listsAllActiveRidesIncludingOwnJoinedAndFull() {
         Ride valid = ride(
                 "valid",
                 "USC",
@@ -113,7 +113,9 @@ public class SearchServiceTest {
                 CURRENT_USER
         );
 
-        assertEquals(Collections.singletonList(valid), results);
+        // Own, joined and full rides are listed (the screen blocks requesting them);
+        // completed and cancelled rides are not.
+        assertEquals(Arrays.asList(valid, ownRide, alreadyJoined, full), results);
     }
 
     @Test
@@ -262,10 +264,69 @@ public class SearchServiceTest {
     }
 
     @Test
-    public void keywordError_requiresBothKeywords() {
+    public void keywordError_bothOrNeither() {
         assertEquals(SearchService.ERROR_KEYWORDS_REQUIRED, SearchService.keywordError("USC", " "));
         assertEquals(SearchService.ERROR_KEYWORDS_REQUIRED, SearchService.keywordError("", "LAX"));
         org.junit.Assert.assertNull(SearchService.keywordError("USC", "LAX"));
+        org.junit.Assert.assertNull(SearchService.keywordError("", " "));
+    }
+
+    @Test
+    public void filterRides_keywordMatchesTypedNameOrAddress() {
+        Ride ride = ride("r", "3201 S Hoover St, Los Angeles, CA 90089, USA",
+                "200 Medical Plaza, Los Angeles, CA 90024, USA", "organizer",
+                Ride.STATUS_ON_TIME, 4, Collections.singletonList("organizer"));
+        ride.origin.searchQuery = "USC";
+        ride.destination.name = "UCLA Medical Center";
+
+        for (String[] keywords : new String[][]{{"usc", "ucla"}, {"Hoover", "medical plaza"},
+                {"southern california", "90024"}, {"hoover 90089", "los angeles medical"}}) {
+            assertEquals(Collections.singletonList(ride), SearchService.filterRides(
+                    Collections.singletonList(ride),
+                    new SearchCriteria(keywords[0], keywords[1]), CURRENT_USER));
+        }
+        assertEquals(Collections.emptyList(), SearchService.filterRides(
+                Collections.singletonList(ride), new SearchCriteria("usc", "lax"), CURRENT_USER));
+    }
+
+    @Test
+    public void filterRides_radiusIncludesAndExcludesEachPickedEnd() {
+        PlaceInfo usc = place("USC", 34.0224, -118.2851);
+        PlaceInfo ucla = place("UCLA", 34.0689, -118.4452);
+        Ride inside = timedRide("inside", 2026, Calendar.NOVEMBER, 2, 10, 0, 4, 1);
+        inside.origin = place("Near USC", 34.0250, -118.2850);      // ~0.2 mi from USC
+        inside.destination = place("Westwood", 34.0635, -118.4455); // ~0.4 mi from UCLA
+        Ride destinationTooFar = timedRide("far-dest", 2026, Calendar.NOVEMBER, 2, 11, 0, 4, 1);
+        destinationTooFar.origin = place("Near USC", 34.0250, -118.2850);
+        destinationTooFar.destination = place("Santa Monica Pier", 34.0094, -118.4973); // ~5 mi
+        Ride originTooFar = timedRide("far-origin", 2026, Calendar.NOVEMBER, 2, 12, 0, 4, 1);
+        originTooFar.origin = place("Pasadena", 34.1478, -118.1445);   // ~11 mi from USC
+        originTooFar.destination = place("Westwood", 34.0635, -118.4455);
+
+        List<Ride> rides = Arrays.asList(inside, destinationTooFar, originTooFar);
+
+        // Both points, 3 mi: only the ride with both ends inside.
+        assertEquals(Collections.singletonList(inside), SearchService.filterRides(rides,
+                criteria(usc, ucla, 3, null, null, null, null, 0, SortOption.DEPARTURE_EARLIEST),
+                CURRENT_USER));
+        // Destination point only, 3 mi: origin is ignored, Pasadena ride now passes.
+        assertEquals(Arrays.asList(inside, originTooFar), SearchService.filterRides(rides,
+                criteria(null, ucla, 3, null, null, null, null, 0, SortOption.DEPARTURE_EARLIEST),
+                CURRENT_USER));
+        // Origin point only, 10 mi: Pasadena (~11 mi) is excluded.
+        assertEquals(Arrays.asList(inside, destinationTooFar), SearchService.filterRides(rides,
+                criteria(usc, null, 10, null, null, null, null, 0, SortOption.DEPARTURE_EARLIEST),
+                CURRENT_USER));
+    }
+
+    @Test
+    public void filterRides_statusFilter() {
+        Ride onTime = ride("a", "USC", "LAX", "o", Ride.STATUS_ON_TIME, 4, Collections.singletonList("o"));
+        Ride delayed = ride("b", "USC", "LAX", "o", Ride.STATUS_DELAYED, 4, Collections.singletonList("o"));
+        SearchCriteria delayedOnly = new SearchCriteria("", "", null, null, 0, null, null, null,
+                null, 0, SortOption.DEPARTURE_EARLIEST, Ride.STATUS_DELAYED);
+        assertEquals(Collections.singletonList(delayed), SearchService.filterRides(
+                Arrays.asList(onTime, delayed), delayedOnly, CURRENT_USER));
     }
 
     private static Ride ride(

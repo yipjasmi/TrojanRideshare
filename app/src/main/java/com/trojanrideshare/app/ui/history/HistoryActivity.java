@@ -20,6 +20,7 @@ import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.user.UserDataAccess;
 import com.trojanrideshare.app.model.*;
 import com.trojanrideshare.app.service.history.HistoryService;
+import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
 import java.text.DateFormat;
@@ -27,6 +28,7 @@ import java.util.*;
 
 public class HistoryActivity extends AppCompatActivity {
     private final HistoryService service = new HistoryService();
+    private final PaymentService paymentService = new PaymentService();
     private List<Ride> rides = new ArrayList<>();
     private Map<String, Payment> payments = new HashMap<>();
     private String uid;
@@ -37,35 +39,11 @@ public class HistoryActivity extends AppCompatActivity {
     private final List<String> participantIds = new ArrayList<>();
     private final Map<String, String> participantNames = new HashMap<>();
     private final UserDataAccess userDataAccess = new UserDataAccess();
-    /** Used when a point is picked for a radius search but no radius is typed. */
-    private static final double DEFAULT_RADIUS_MILES = 5.0;
     public static final String NO_ACTIVITY_MESSAGE = "No activity! Please select another month.";
+    // Map points looked up from the typed origin/destination (radius searches only).
     private PlaceInfo originCenter, destinationCenter;
-    private boolean pickingOrigin;
-    private final ActivityResultLauncher<Intent> picker = registerForActivityResult(
-        new ActivityResultContracts.StartActivityForResult(), result -> {
-            Intent data = result.getData();
-            if (result.getResultCode() == Activity.RESULT_OK && data != null) {
-                Place place = Autocomplete.getPlaceFromIntent(data);
-                if (place.getLatLng() == null) { message.setText("Selected location has no coordinates."); return; }
-                PlaceInfo value = new PlaceInfo(); value.address = place.getFormattedAddress();
-                value.placeId = place.getId(); value.lat = place.getLatLng().latitude;
-                value.lng = place.getLatLng().longitude;
-                if (pickingOrigin) { originCenter = value; origin.setText(value.address); }
-                else { destinationCenter = value; destination.setText(value.address); }
-            } else if (result.getResultCode() == AutocompleteActivity.RESULT_ERROR) {
-                if (data == null) {
-                    message.setText("Places returned an error without details.");
-                    return;
-                }
-                com.google.android.gms.common.api.Status error =
-                        Autocomplete.getStatusFromIntent(data);
-                android.util.Log.e("HistoryPlaces", "Places error: " + error);
-                message.setText("Places error " + error.getStatusCode()
-                        + ": " + error.getStatusMessage());
-            }
-        });
-
+    private String originCenterFor, destinationCenterFor;
+    private TextView originUsing, destinationUsing;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_history);
@@ -76,22 +54,34 @@ public class HistoryActivity extends AppCompatActivity {
         BottomNavHelper.setupBottomNav(this, R.id.nav_history);
         content = findViewById(R.id.historyContent);
         label("Ride history", 26);
-        label("Completed and cancelled rides you took part in. Every search input is optional: "
-            + "type an origin and/or destination keyword, or pick a point to search by radius "
-            + "(default " + (int) DEFAULT_RADIUS_MILES + " miles).", 14);
-        origin = input("Origin keyword (optional)", false); destination = input("Destination keyword (optional)", false);
-        button("Pick origin point for radius", () -> choosePlace(true));
-        button("Pick destination point for radius", () -> choosePlace(false));
-        radius = input("Radius in miles (default " + (int) DEFAULT_RADIUS_MILES + ")", true);
+        label("Completed and cancelled rides you took part in. All inputs are optional. Type an "
+            + "origin and/or destination to match rides by name. Add a radius to instead find rides "
+            + "within that many miles of those places.", 14);
+        origin = input("Origin, e.g. USC (optional)", false);
+        originUsing = usingLabel(true);
+        destination = input("Destination, e.g. LAX (optional)", false);
+        destinationUsing = usingLabel(false);
+        radius = input("Radius in miles (optional, turns on distance search)", true);
         status = spinner(new String[]{"Completed and cancelled", "Completed", "Cancelled"});
         sort = spinner(new String[]{"Newest first", "Oldest first"});
         participant = spinner(new String[]{"All participants"});
         button("Apply history filters", this::render);
         button("Clear history filters", () -> {
             origin.setText(""); destination.setText(""); radius.setText("");
-            originCenter = null; destinationCenter = null;
+            originCenter = null; destinationCenter = null; originCenterFor = null; destinationCenterFor = null;
             status.setSelection(0); sort.setSelection(0); participant.setSelection(0); render();
         });
+        button("Refresh history and payments", this::load);
+        message = label("", 16);
+        results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL); content.addView(results);
+
+        // Monthly summary sits below the ride list, separated by a divider.
+        View divider = new View(this);
+        divider.setBackgroundColor(0x33000000);
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 2);
+        dividerParams.setMargins(0, 48, 0, 24);
+        content.addView(divider, dividerParams);
         label("Monthly summary", 22);
         Calendar now = Calendar.getInstance();
         month = spinner(new String[]{"January", "February", "March", "April", "May", "June",
@@ -100,9 +90,6 @@ public class HistoryActivity extends AppCompatActivity {
         year = input("Year", true); year.setText(String.valueOf(now.get(Calendar.YEAR)));
         button("Show monthly summary", this::renderSummary);
         summary = label("", 16);
-        button("Refresh history and payments", this::load);
-        message = label("", 16);
-        results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL); content.addView(results);
         if (!BuildConfig.PLACES_API_KEY.trim().isEmpty() && !Places.isInitialized())
             Places.initializeWithNewPlacesApiEnabled(getApplicationContext(), BuildConfig.PLACES_API_KEY);
     }
@@ -157,14 +144,68 @@ public class HistoryActivity extends AppCompatActivity {
         participant.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
         participant.setSelection(Math.max(0, position));
     }
+    /**
+     * No radius: match by the typed words. Radius: look up each typed place and match rides
+     * within the radius of it instead (an empty box doesn't limit that end).
+     */
     private void render() {
         if (uid == null) return;
+        String radiusText = radius.getText().toString().trim();
+        String originText = origin.getText().toString().trim();
+        String destinationText = destination.getText().toString().trim();
+        if (radiusText.isEmpty()) {
+            originUsing.setVisibility(View.GONE); destinationUsing.setVisibility(View.GONE);
+            renderWith(null, null);
+            return;
+        }
+        if (originText.isEmpty() && destinationText.isEmpty()) {
+            results.removeAllViews();
+            message.setText("Enter an origin or destination to search by distance.");
+            return;
+        }
+        if (!originText.isEmpty() && (originCenter == null || !originText.equalsIgnoreCase(originCenterFor))) {
+            resolve(true, originText); return;
+        }
+        if (!destinationText.isEmpty() && (destinationCenter == null || !destinationText.equalsIgnoreCase(destinationCenterFor))) {
+            resolve(false, destinationText); return;
+        }
+        PlaceInfo o = originText.isEmpty() ? null : originCenter;
+        PlaceInfo d = destinationText.isEmpty() ? null : destinationCenter;
+        showUsing(originUsing, o); showUsing(destinationUsing, d);
+        renderWith(o, d);
+    }
+    private void resolve(boolean isOrigin, String text) {
+        message.setText("Looking up " + text + "...");
+        com.trojanrideshare.app.util.PlaceResolver.resolve(this, text,
+            new com.trojanrideshare.app.util.PlaceResolver.Callback() {
+                public void onResolved(PlaceInfo place) {
+                    if (isFinishing() || isDestroyed()) return;
+                    if (isOrigin) { originCenter = place; originCenterFor = text; }
+                    else { destinationCenter = place; destinationCenterFor = text; }
+                    render();
+                }
+                public void onError(String error) {
+                    if (isFinishing() || isDestroyed()) return;
+                    results.removeAllViews(); message.setText(error);
+                    (isOrigin ? origin : destination).setError(error);
+                }
+            });
+    }
+    private void showUsing(TextView label, PlaceInfo place) {
+        if (place == null) { label.setVisibility(View.GONE); return; }
+        label.setText("📍 Using " + com.trojanrideshare.app.util.PlaceResolver.label(place) + "  (tap to change)");
+        label.setVisibility(View.VISIBLE);
+    }
+    private TextView usingLabel(boolean isOrigin) {
+        TextView v = label("", 13);
+        v.setVisibility(View.GONE);
+        v.setOnClickListener(view -> choosePlace(isOrigin));
+        return v;
+    }
+    private void renderWith(PlaceInfo originPoint, PlaceInfo destinationPoint) {
         HistoryFilter f = new HistoryFilter();
         f.origin = origin.getText().toString(); f.destination = destination.getText().toString();
-        // Editing an address invalidates its earlier Places selection.
-        if (originCenter != null && !f.origin.equals(originCenter.address)) originCenter = null;
-        if (destinationCenter != null && !f.destination.equals(destinationCenter.address)) destinationCenter = null;
-        f.originCenter = originCenter; f.destinationCenter = destinationCenter;
+        f.originCenter = originPoint; f.destinationCenter = destinationPoint;
         f.status = new String[]{"", Ride.STATUS_COMPLETED,
             Ride.STATUS_CANCELLED}[status.getSelectedItemPosition()];
         f.oldestFirst = sort.getSelectedItemPosition() == 1;
@@ -173,12 +214,13 @@ public class HistoryActivity extends AppCompatActivity {
         try {
             String value = radius.getText().toString().trim();
             if (!value.isEmpty()) f.radiusMiles = Double.parseDouble(value);
-            else if (originCenter != null || destinationCenter != null) f.radiusMiles = DEFAULT_RADIUS_MILES;
             List<Ride> displayed = HistoryService.filter(rides, uid, f, System.currentTimeMillis());
             results.removeAllViews();
             message.setText(displayed.isEmpty() ? "No rides match your history filters." : displayed.size() + " rides");
             for (Ride ride : displayed) {
-                TextView row = new TextView(this); row.setTextSize(16); row.setPadding(0, 20, 0, 20);
+                LinearLayout item = new LinearLayout(this); item.setOrientation(LinearLayout.VERTICAL);
+                item.setPadding(0, 20, 0, 20);
+                TextView row = new TextView(this); row.setTextSize(16);
                 String text = fallback(ride.title, "Ride") + "\n" + address(ride.origin) + " → " + address(ride.destination)
                     + "\n" + DateFormat.getDateTimeInstance().format(ride.departureTime.toDate())
                     + "\nStatus: " + statusLabel(ride.status) + " · Participants: " + ride.getAllParticipantIds().size()
@@ -191,10 +233,19 @@ public class HistoryActivity extends AppCompatActivity {
                     text += p == null ? "\nYour share: not assigned yet" : "\nYour share: "
                         + Money.format(Money.toCents(p.amount)) + " · " + (p.paid ? "Paid" : "Unpaid");
                 }
-                row.setText(text); results.addView(row);
+                row.setText(text); item.addView(row);
+                Payment share = payments.get(ride.id);
+                if (Ride.STATUS_COMPLETED.equals(ride.status) && share != null && !share.paid
+                        && uid.equals(share.userId)) {
+                    Button payNow = new Button(this);
+                    payNow.setText("Pay now (" + Money.format(Money.toCents(share.amount)) + ")");
+                    payNow.setOnClickListener(view -> confirmPay(ride, share, payNow));
+                    item.addView(payNow);
+                }
+                results.addView(item);
             }
         } catch (IllegalArgumentException error) {
-            results.removeAllViews(); message.setText("Enter a positive radius and choose at least one location using the location buttons.");
+            results.removeAllViews(); message.setText("Enter a radius greater than 0 miles.");
         }
     }
     private void renderSummary() {
@@ -210,10 +261,38 @@ public class HistoryActivity extends AppCompatActivity {
                 + (s.unassignedShares == 0 ? "" : "\n" + s.unassignedShares + " ride(s) awaiting your cost share; total is incomplete."));
         } catch (NumberFormatException error) { year.setError("Enter a year from 1 to 9999"); }
     }
+    /** Marks the rider's own share paid after they've paid the organizer outside the app. */
+    private void confirmPay(Ride ride, Payment share, Button payNow) {
+        String amount = Money.format(Money.toCents(share.amount));
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Mark " + amount + " as paid?")
+            .setMessage("Do this after you've paid the organizer for \"" + fallback(ride.title, "this ride")
+                + "\" (cash, Venmo, etc.). You can't undo it, and the organizer will see it as Paid.")
+            .setNegativeButton("Not yet", null)
+            .setPositiveButton("I've paid", (dialog, which) -> {
+                payNow.setEnabled(false);
+                paymentService.markPaid(ride.id, uid, new PaymentService.UpdateCallback() {
+                    public void onSuccess() {
+                        if (isFinishing() || isDestroyed()) return;
+                        Toast.makeText(HistoryActivity.this, "Marked as paid.", Toast.LENGTH_SHORT).show();
+                        load();
+                    }
+                    public void onError(String error) {
+                        if (isFinishing() || isDestroyed()) return;
+                        payNow.setEnabled(true);
+                        Toast.makeText(HistoryActivity.this, error, Toast.LENGTH_LONG).show();
+                    }
+                });
+            })
+            .show();
+    }
+    /** Lets the user pick a different place when the looked-up one isn't what they meant. */
     private void choosePlace(boolean isOrigin) {
-        com.trojanrideshare.app.util.PlacesLocationPicker.show(this, selected -> {
-            if (isOrigin) { originCenter = selected; origin.setText(selected.address); }
-            else { destinationCenter = selected; destination.setText(selected.address); }
+        String typed = (isOrigin ? origin : destination).getText().toString().trim();
+        com.trojanrideshare.app.util.PlacesLocationPicker.show(this, typed, selected -> {
+            if (isOrigin) { originCenter = selected; originCenterFor = typed; }
+            else { destinationCenter = selected; destinationCenterFor = typed; }
+            render();
         });
     }
     private TextView label(String text, int size) {
