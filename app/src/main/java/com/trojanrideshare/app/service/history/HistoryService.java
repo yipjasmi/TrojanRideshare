@@ -27,9 +27,9 @@ public class HistoryService {
         List<Ride> result = new ArrayList<>();
         for (Ride r : rides) {
             if (uid == null || !r.getAllParticipantIds().contains(uid) || r.departureTime == null) continue;
-            // Terminal rides are history even if cancelled before their planned departure.
-            if (!Ride.STATUS_COMPLETED.equals(r.status) && !Ride.STATUS_CANCELLED.equals(r.status)
-                    && r.departureTime.toDate().getTime() > now) continue;
+            // History is Completed and Cancelled rides only. Upcoming rides, and departed rides
+            // still waiting for the organizer to complete them, stay on the profile.
+            if (!Ride.STATUS_COMPLETED.equals(r.status) && !Ride.STATUS_CANCELLED.equals(r.status)) continue;
             if (!matches(r.origin, f.origin, f.originCenter, f.radiusMiles)
                     || !matches(r.destination, f.destination, f.destinationCenter, f.radiusMiles)) continue;
             if (!f.status.isEmpty() && !f.status.equals(r.status)) continue;
@@ -56,7 +56,11 @@ public class HistoryService {
         return 3958.7613 * 2 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, h))));
     }
 
-    /** Month is 1..12; dates use the device timezone, matching displayed history dates. */
+    /**
+     * Month is 1..12. The month comes from the ride's scheduled departure date (the updated time
+     * for a delayed ride), not from when it was marked completed. Cancelled rides are excluded.
+     * Dates use the device timezone, matching displayed history dates.
+     */
     public static MonthlySummary summarize(List<Ride> rides, Map<String, Payment> payments,
                                            String uid, int year, int month) {
         if (month < 1 || month > 12) throw new IllegalArgumentException("Invalid month");
@@ -71,8 +75,13 @@ public class HistoryService {
             summary.completedRides++;
             if (uid.equals(r.organizerId)) summary.ownedRides++; else summary.joinedRides++;
             Payment p = payments.get(r.id);
-            if (p == null || !uid.equals(p.userId)) summary.unassignedShares++;
-            else summary.totalCostCents += Money.toCents(p.amount);
+            if (p == null || !uid.equals(p.userId)) {
+                summary.unassignedShares++;
+            } else {
+                long cents = Money.toCents(p.amount);
+                summary.totalCostCents += cents;
+                if (p.paid) summary.paidCostCents += cents; else summary.unpaidCostCents += cents;
+            }
         }
         return summary;
     }

@@ -164,7 +164,8 @@ service cloud.firestore {
       // A missing share has to be readable too, the split transaction checks for one before
       // the first save.
       allow get: if isUscStudent() && (resource == null || isMine());
-      allow list: if isUscStudent() && isMine();
+      // Flagged shares are listable by any student so the flag can show on the user's profile.
+      allow list: if isUscStudent() && (isMine() || resource.data.flagged == true);
       allow create: if isUscStudent() && isSplitWrite();
       allow update: if isUscStudent()
         && ((resource.data.paidAt == null && isSplitWrite()) || isMarkPaid() || isFlag());

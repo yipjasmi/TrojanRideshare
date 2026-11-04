@@ -100,8 +100,11 @@ public class EditRideService {
             return;
         }
 
-        rideDataAccess.updateStatus(
-                existing.id, Ride.STATUS_COMPLETED, new RideDataAccess.WriteCallback() {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("status", Ride.STATUS_COMPLETED);
+        updates.put("completedAt", Timestamp.now());
+        rideDataAccess.updateRide(
+                existing.id, updates, new RideDataAccess.WriteCallback() {
                     @Override
                     public void onSuccess() {
                         notifyRiders(existing, Notification.TYPE_RIDE_UPDATED,

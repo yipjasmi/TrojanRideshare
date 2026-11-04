@@ -31,6 +31,8 @@ public class Ride {
     @Deprecated @Exclude public String capacityStatus;
     public List<String> participantIds = new ArrayList<>();
     public Double finalCost;
+    /** When the organizer marked the ride completed. Summaries still use the scheduled date. */
+    public Timestamp completedAt;
     public Timestamp createdAt;
 
     public Ride() {}
