@@ -68,8 +68,15 @@ public class SearchActivity extends AppCompatActivity {
     private Button endTimeButton;
     private CheckBox timeFilterCheckBox;
     private CheckBox distanceFilterCheckBox;
-    private Spinner minimumSeatsSpinner;
+    /** 0 means any. A ride has at most 5 open seats (6 riders including the organizer). */
+    private static final int MAX_SEATS_FILTER = 5;
+    private int minimumSeats = 0;
+    private TextView seatsValueText;
+    private Button seatsDecreaseButton;
+    private Button seatsIncreaseButton;
     private Spinner sortSpinner;
+    private CheckBox statusOnTimeCheckBox;
+    private CheckBox statusDelayedCheckBox;
     private ProgressBar loadingIndicator;
     private TextView resultMessage;
     private LinearLayout resultsContainer;
@@ -153,13 +160,7 @@ public class SearchActivity extends AppCompatActivity {
         findViewById(R.id.clearFiltersButton).setOnClickListener(view -> clearFilters());
 
         loadPendingJoinRequests();
-        showSearchPrompt();
-    }
-
-    private void showSearchPrompt() {
-        resultsContainer.removeAllViews();
-        resultMessage.setText("Enter an origin and a destination keyword, then tap Search.");
-        resultMessage.setVisibility(View.VISIBLE);
+        search();
     }
 
     private void showPreferredLocation(boolean isOrigin, PlaceInfo selected) {
@@ -181,8 +182,15 @@ public class SearchActivity extends AppCompatActivity {
         endTimeButton = findViewById(R.id.endTimeButton);
         timeFilterCheckBox = findViewById(R.id.timeFilterCheckBox);
         distanceFilterCheckBox = findViewById(R.id.distanceFilterCheckBox);
-        minimumSeatsSpinner = findViewById(R.id.minimumSeatsSpinner);
+        seatsValueText = findViewById(R.id.seatsValueText);
+        seatsDecreaseButton = findViewById(R.id.seatsDecreaseButton);
+        seatsIncreaseButton = findViewById(R.id.seatsIncreaseButton);
+        seatsDecreaseButton.setOnClickListener(view -> setMinimumSeats(minimumSeats - 1));
+        seatsIncreaseButton.setOnClickListener(view -> setMinimumSeats(minimumSeats + 1));
+        setMinimumSeats(0);
         sortSpinner = findViewById(R.id.sortSpinner);
+        statusOnTimeCheckBox = findViewById(R.id.statusOnTimeCheckBox);
+        statusDelayedCheckBox = findViewById(R.id.statusDelayedCheckBox);
         loadingIndicator = findViewById(R.id.searchLoadingIndicator);
         resultMessage = findViewById(R.id.searchResultMessage);
         resultsContainer = findViewById(R.id.searchResultsContainer);
@@ -317,9 +325,17 @@ public class SearchActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.search_invalid_date_range, Toast.LENGTH_LONG).show();
             return;
         }
+        originInput.setError(null);
+        destinationInput.setError(null);
+        if (!statusOnTimeCheckBox.isChecked() && !statusDelayedCheckBox.isChecked()) {
+            resultsContainer.removeAllViews();
+            resultMessage.setText("Select On Time, Delayed, or both.");
+            resultMessage.setVisibility(View.VISIBLE);
+            return;
+        }
         boolean requiresLocations = distanceFilterCheckBox.isChecked()
                 || sortSpinner.getSelectedItemPosition() >= 2;
-        if (requiresLocations && (preferredOrigin == null || preferredDestination == null)) {
+        if (requiresLocations && preferredOrigin == null && preferredDestination == null) {
             Toast.makeText(this, R.string.search_locations_required, Toast.LENGTH_LONG).show();
             return;
         }
@@ -351,8 +367,9 @@ public class SearchActivity extends AppCompatActivity {
                 endDateMillis,
                 timeFilterCheckBox.isChecked() ? startTimeMinute : null,
                 timeFilterCheckBox.isChecked() ? endTimeMinute : null,
-                minimumSeatsSpinner.getSelectedItemPosition(),
-                selectedSortOption()
+                minimumSeats,
+                selectedSortOption(),
+                selectedStatusFilter()
         );
 
         searchService.search(
@@ -374,6 +391,22 @@ public class SearchActivity extends AppCompatActivity {
                     }
                 }
         );
+    }
+
+    /** Both boxes (or neither, which search() blocks) means no status filter. */
+    private String selectedStatusFilter() {
+        boolean onTime = statusOnTimeCheckBox.isChecked();
+        boolean delayed = statusDelayedCheckBox.isChecked();
+        if (onTime && !delayed) return Ride.STATUS_ON_TIME;
+        if (delayed && !onTime) return Ride.STATUS_DELAYED;
+        return "";
+    }
+
+    private void setMinimumSeats(int value) {
+        minimumSeats = Math.max(0, Math.min(MAX_SEATS_FILTER, value));
+        seatsValueText.setText(minimumSeats == 0 ? "Any" : minimumSeats + "+");
+        seatsDecreaseButton.setEnabled(minimumSeats > 0);
+        seatsIncreaseButton.setEnabled(minimumSeats < MAX_SEATS_FILTER);
     }
 
     private SortOption selectedSortOption() {
@@ -404,14 +437,16 @@ public class SearchActivity extends AppCompatActivity {
         distanceFilterCheckBox.setChecked(false);
         maximumDistanceInput.setText("");
         maximumDistanceInput.setError(null);
-        minimumSeatsSpinner.setSelection(0);
+        setMinimumSeats(0);
         sortSpinner.setSelection(0);
+        statusOnTimeCheckBox.setChecked(true);
+        statusDelayedCheckBox.setChecked(true);
         originInput.setError(null);
         destinationInput.setError(null);
         showPreferredLocation(true, null);
         showPreferredLocation(false, null);
         updateTimeButtons();
-        showSearchPrompt();
+        search();
     }
 
     private void setLoading(boolean loading) {
@@ -458,12 +493,31 @@ public class SearchActivity extends AppCompatActivity {
         ((TextView) item.findViewById(R.id.rideDeparture)).setText(departure);
 
         int availableSeats = ride.getAvailableSeats();
-        ((TextView) item.findViewById(R.id.rideSeats)).setText(getResources()
-                .getQuantityString(R.plurals.search_available_seats, availableSeats, availableSeats));
+        ((TextView) item.findViewById(R.id.rideSeats)).setText(availableSeats <= 0
+                ? "Full · " + ride.getRiderCount() + " of " + ride.maxRiders + " riders"
+                : "Open · " + getResources().getQuantityString(
+                        R.plurals.search_available_seats, availableSeats, availableSeats));
 
         Button requestButton = item.findViewById(R.id.joinRequestButton);
         TextView requestStatus = item.findViewById(R.id.joinRequestStatus);
-        if (requestedRideIds.contains(ride.id)) {
+        String currentUserId = getCurrentUserId();
+        String blocked = null;
+        if (currentUserId != null && currentUserId.equals(ride.organizerId)) {
+            blocked = "Your ride";
+        } else if (currentUserId != null && ride.participantIds != null
+                && ride.participantIds.contains(currentUserId)) {
+            blocked = "Joined";
+        } else if (availableSeats <= 0 && !requestedRideIds.contains(ride.id)) {
+            // A pending requester can still cancel from here even if the ride filled up.
+            blocked = "Full";
+        }
+        if (blocked != null) {
+            // Shown so the blocks are visible, but these can't be requested.
+            requestButton.setEnabled(false);
+            requestButton.setText(blocked);
+            requestButton.setOnClickListener(null);
+            requestStatus.setVisibility(View.GONE);
+        } else if (requestedRideIds.contains(ride.id)) {
             showPendingState(ride, requestButton, requestStatus);
         } else {
             showAvailableState(ride, requestButton, requestStatus);

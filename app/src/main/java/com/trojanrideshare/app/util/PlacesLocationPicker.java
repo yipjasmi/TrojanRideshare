@@ -58,7 +58,7 @@ public final class PlacesLocationPicker {
                             for (int i=0; i<options.getChildCount(); i++) options.getChildAt(i).setEnabled(false);
                             state.setText("Loading selected location...");
                             FetchPlaceRequest details = FetchPlaceRequest.builder(prediction.getPlaceId(),
-                                Arrays.asList(Place.Field.ID, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION))
+                                Arrays.asList(Place.Field.ID, Place.Field.DISPLAY_NAME, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION))
                                 .setSessionToken(token).build();
                             client.fetchPlace(details).addOnSuccessListener(activity, responseDetails -> {
                                 if (!dialog.isShowing()) return;
@@ -71,6 +71,9 @@ public final class PlacesLocationPicker {
                                 value.address = place.getFormattedAddress();
                                 if (value.address == null) value.address = prediction.getFullText(null).toString();
                                 value.lat = place.getLocation().latitude; value.lng = place.getLocation().longitude;
+                                value.name = place.getDisplayName() != null ? place.getDisplayName()
+                                    : prediction.getPrimaryText(null).toString();
+                                value.searchQuery = text;
                                 dialog.dismiss(); callback.onSelected(value);
                             }).addOnFailureListener(activity, error -> {
                                 if (!dialog.isShowing()) return;

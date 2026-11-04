@@ -174,11 +174,76 @@
                         android:text="@string/search_seats_label"
                         android:textAppearance="?attr/textAppearanceBodyMedium" />
 
-                    <Spinner
-                        android:id="@+id/minimumSeatsSpinner"
+                    <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:entries="@array/search_seat_options" />
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/seatsDecreaseButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:contentDescription="Fewer seats"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:padding="0dp"
+                            android:text="−"
+                            android:textSize="20sp" />
+
+                        <TextView
+                            android:id="@+id/seatsValueText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:layout_marginEnd="16dp"
+                            android:minWidth="64dp"
+                            android:gravity="center"
+                            android:text="Any"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <Button
+                            android:id="@+id/seatsIncreaseButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:contentDescription="More seats"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:padding="0dp"
+                            android:text="+"
+                            android:textSize="20sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="Ride status"
+                        android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <CheckBox
+                            android:id="@+id/statusOnTimeCheckBox"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true"
+                            android:text="On Time" />
+
+                        <CheckBox
+                            android:id="@+id/statusDelayedCheckBox"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:checked="true"
+                            android:text="Delayed" />
+                    </LinearLayout>
 
                     <CheckBox
                         android:id="@+id/distanceFilterCheckBox"

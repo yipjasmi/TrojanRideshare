@@ -6,6 +6,7 @@ import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.SearchCriteria;
 import com.trojanrideshare.app.model.SortOption;
+import com.trojanrideshare.app.util.KeywordMatcher;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -59,11 +60,14 @@ public class SearchService {
     public static final String ERROR_KEYWORDS_REQUIRED =
             "Enter both an origin keyword and a destination keyword.";
 
-    /** Both keyword inputs are required; returns an error message or {@code null}. */
+    /**
+     * Keywords are optional (no keywords lists every ride), but a keyword search needs both:
+     * filling in only one is an error.
+     */
     public static String keywordError(String originKeyword, String destinationKeyword) {
         boolean missingOrigin = originKeyword == null || originKeyword.trim().isEmpty();
         boolean missingDestination = destinationKeyword == null || destinationKeyword.trim().isEmpty();
-        return missingOrigin || missingDestination ? ERROR_KEYWORDS_REQUIRED : null;
+        return missingOrigin != missingDestination ? ERROR_KEYWORDS_REQUIRED : null;
     }
 
     static List<Ride> filterRides(
@@ -75,9 +79,10 @@ public class SearchService {
     }
 
     /**
-     * Results are active (On Time or Delayed) rides with at least one open seat that haven't
-     * departed yet ({@code now} null skips the departure check). A Delayed ride uses its updated
-     * departure time for filtering and sorting.
+     * Results are every active (On Time or Delayed) ride that hasn't departed yet ({@code now}
+     * null skips the departure check), including full rides, the user's own rides and rides
+     * they joined; the screen labels those and blocks requesting them. The filters narrow
+     * this list. A Delayed ride uses its updated departure time for filtering and sorting.
      */
     static List<Ride> filterRides(
             List<Ride> rides,
@@ -101,13 +106,13 @@ public class SearchService {
             if (now != null && ride.hasDeparted(now)) {
                 continue;
             }
-            if (!containsIgnoreCase(addressOf(ride.origin), safeCriteria.originKeyword)) {
+            if (!safeCriteria.statusFilter.isEmpty() && !safeCriteria.statusFilter.equals(ride.status)) {
                 continue;
             }
-            if (!containsIgnoreCase(
-                    addressOf(ride.destination),
-                    safeCriteria.destinationKeyword
-            )) {
+            if (!KeywordMatcher.matches(ride.origin, safeCriteria.originKeyword)) {
+                continue;
+            }
+            if (!KeywordMatcher.matches(ride.destination, safeCriteria.destinationKeyword)) {
                 continue;
             }
             if (!matchesDateAndTime(ride, safeCriteria)) {
@@ -167,16 +172,23 @@ public class SearchService {
         return departureMinute >= earliest || departureMinute <= latest;
     }
 
+    /**
+     * One shared radius. Every end the user picked a point for must be within it: with both
+     * points picked, a ride is excluded if either its origin or its destination is too far.
+     */
     private static boolean matchesRouteDistance(Ride ride, SearchCriteria criteria) {
         if (criteria.maximumDistanceMiles <= 0) {
             return true;
         }
-        if (!criteria.hasRouteReference() || ride.origin == null || ride.destination == null) {
+        if (!criteria.hasAnyReference()) {
             return false;
         }
-        return distanceMiles(criteria.preferredOrigin, ride.origin)
-                <= criteria.maximumDistanceMiles
-                && distanceMiles(criteria.preferredDestination, ride.destination)
+        if (criteria.preferredOrigin != null
+                && distanceMiles(criteria.preferredOrigin, ride.origin) > criteria.maximumDistanceMiles) {
+            return false;
+        }
+        return criteria.preferredDestination == null
+                || distanceMiles(criteria.preferredDestination, ride.destination)
                 <= criteria.maximumDistanceMiles;
     }
 
@@ -211,12 +223,23 @@ public class SearchService {
         return (long) Math.floor(distance / PROXIMITY_TIE_MILES);
     }
 
+    /** Distance from each picked point to the matching end of the ride, added together. */
     private static double routeDistanceMiles(Ride ride, SearchCriteria criteria) {
-        if (!criteria.hasRouteReference() || ride.origin == null || ride.destination == null) {
+        if (!criteria.hasAnyReference()) {
             return Double.MAX_VALUE;
         }
-        return distanceMiles(criteria.preferredOrigin, ride.origin)
-                + distanceMiles(criteria.preferredDestination, ride.destination);
+        double total = 0;
+        if (criteria.preferredOrigin != null) {
+            double distance = distanceMiles(criteria.preferredOrigin, ride.origin);
+            if (distance == Double.MAX_VALUE) return Double.MAX_VALUE;
+            total += distance;
+        }
+        if (criteria.preferredDestination != null) {
+            double distance = distanceMiles(criteria.preferredDestination, ride.destination);
+            if (distance == Double.MAX_VALUE) return Double.MAX_VALUE;
+            total += distance;
+        }
+        return total;
     }
 
     private static long departureMillis(Ride ride) {
@@ -258,28 +281,6 @@ public class SearchService {
                 && !Ride.STATUS_DELAYED.equals(ride.status)) {
             return false;
         }
-        if (currentUserId.equals(ride.organizerId)) {
-            return false;
-        }
-
-        List<String> participants = ride.participantIds == null
-                ? Collections.emptyList()
-                : ride.participantIds;
-        if (participants.contains(currentUserId)) {
-            return false;
-        }
-        return ride.getAvailableSeats() > 0;
-    }
-
-    private static String addressOf(com.trojanrideshare.app.model.PlaceInfo place) {
-        return place == null || place.address == null ? "" : place.address;
-    }
-
-    private static boolean containsIgnoreCase(String value, String keyword) {
-        if (keyword == null || keyword.isEmpty()) {
-            return true;
-        }
-        return value.toLowerCase(Locale.ROOT)
-                .contains(keyword.toLowerCase(Locale.ROOT));
+        return true;
     }
 }

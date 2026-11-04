@@ -1,11 +1,11 @@
 <resources>
     <string name="app_name">TrojanRideshare</string>
     <string name="search_title">Find a ride</string>
-    <string name="search_subtitle">Shows On Time and Delayed rides with open seats that haven\'t departed. Both keywords are required; the other filters are optional.</string>
+    <string name="search_subtitle">All upcoming On Time and Delayed rides are listed below. Use any filters to narrow them. If you search by keyword, fill in both origin and destination.</string>
     <string name="search_route_section">Route</string>
     <string name="search_filters_section">Filters and sorting</string>
-    <string name="search_origin_hint">Origin keyword (required)</string>
-    <string name="search_destination_hint">Destination keyword (required)</string>
+    <string name="search_origin_hint">Origin keyword, e.g. USC or Hoover</string>
+    <string name="search_destination_hint">Destination keyword, e.g. UCLA or LAX</string>
     <string name="search_select_origin">Pick origin point for distance (optional)</string>
     <string name="search_select_destination">Pick destination point for distance (optional)</string>
     <string name="search_date_label">Departure date range (optional)</string>
@@ -15,13 +15,13 @@
     <string name="search_start_time">Start: %1$s</string>
     <string name="search_end_time">End: %1$s</string>
     <string name="search_seats_label">Minimum available seats</string>
-    <string name="search_distance_filter">Within this radius of both picked points</string>
+    <string name="search_distance_filter">Within this radius of each picked point</string>
     <string name="search_distance_hint">Maximum distance (miles)</string>
     <string name="search_sort_label">Sort results by</string>
     <string name="search_clear_filters">Clear filters</string>
     <string name="search_invalid_distance">Enter a maximum distance greater than zero.</string>
     <string name="search_invalid_date_range">The end date must be on or after the start date.</string>
-    <string name="search_locations_required">Choose both preferred locations to use distance filtering or proximity sorting.</string>
+    <string name="search_locations_required">Pick an origin or destination point (or both) to use the radius filter or proximity sorting.</string>
     <string name="search_places_unavailable">Google Places is unavailable. Check the API key in local.properties.</string>
     <string name="search_location_error">Could not select that location. Please try again.</string>
     <string name="search_action">Search rides</string>
@@ -127,14 +127,6 @@
     <string name="payment_flag_name">Flag %1$s</string>
     <string name="payment_flag_title">Flag %1$s?</string>
     <string name="payment_flag_body">They have not marked their %1$s share paid after %2$d days. They will see this flag on their share until they pay.</string>
-    <string-array name="search_seat_options">
-        <item>Any number</item>
-        <item>1+ seat</item>
-        <item>2+ seats</item>
-        <item>3+ seats</item>
-        <item>4+ seats</item>
-        <item>5+ seats</item>
-    </string-array>
     <string-array name="search_sort_options">
         <item>Earliest departure</item>
         <item>Latest departure</item>

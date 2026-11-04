@@ -3,6 +3,7 @@ package com.trojanrideshare.app.service.ride;
 import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.data.notification.NotificationDataAccess;
 import com.trojanrideshare.app.data.ride.RideDataAccess;
+import com.trojanrideshare.app.data.ride.RideMembershipDataAccess;
 import com.trojanrideshare.app.model.Notification;
 import com.trojanrideshare.app.model.Ride;
 
@@ -21,6 +22,7 @@ import java.util.Map;
  *       {@code departureTime}, so search and sorting use it; the posted time is kept in
  *       {@code originalDepartureTime});</li>
  *   <li>mark it Completed, only after its departure time has passed.</li>
+ *   <li>cancel it while it is still active.</li>
  * </ul>
  * Completed and Cancelled are final and cannot be undone.
  */
@@ -51,14 +53,17 @@ public class EditRideService {
 
     private final RideDataAccess rideDataAccess;
     private final NotificationDataAccess notificationDataAccess;
+    private final RideMembershipDataAccess membershipDataAccess;
 
     public EditRideService() {
-        this(new RideDataAccess(), new NotificationDataAccess());
+        this(new RideDataAccess(), new NotificationDataAccess(), new RideMembershipDataAccess());
     }
 
-    EditRideService(RideDataAccess rideDataAccess, NotificationDataAccess notificationDataAccess) {
+    EditRideService(RideDataAccess rideDataAccess, NotificationDataAccess notificationDataAccess,
+                    RideMembershipDataAccess membershipDataAccess) {
         this.rideDataAccess = rideDataAccess;
         this.notificationDataAccess = notificationDataAccess;
+        this.membershipDataAccess = membershipDataAccess;
     }
 
     /** Marks the ride Delayed and moves its departure to {@code newDeparture}. */
@@ -120,8 +125,8 @@ public class EditRideService {
     }
 
     /**
-     * Cancels an active ride. There is no standalone cancel button: cancellation happens when a
-     * solo organizer leaves their ride (Feature 3).
+     * Organizer cancels an active ride. Pending requests are closed (shown to those requesters as
+     * closed because the ride was cancelled) and everyone on the ride sees it as Cancelled.
      */
     public void cancelRide(Ride existing, String actingUserId, Callback callback) {
         String authorization = authorizationError(existing, actingUserId);
@@ -140,6 +145,7 @@ public class EditRideService {
                     public void onSuccess() {
                         notifyRiders(existing, Notification.TYPE_RIDE_CANCELLED,
                                 "\"" + existing.title + "\" was cancelled.");
+                        closePendingRequests(existing);
                         callback.onSuccess();
                     }
 
@@ -148,6 +154,29 @@ public class EditRideService {
                         callback.onError(GENERIC_ERROR);
                     }
                 });
+    }
+
+    private void closePendingRequests(Ride ride) {
+        if (membershipDataAccess == null) return;
+        membershipDataAccess.closePendingRequests(ride.id, requesterIds -> {
+            for (String requesterId : requesterIds) {
+                Notification notification = new Notification();
+                notification.userId = requesterId;
+                notification.type = Notification.TYPE_RIDE_CANCELLED;
+                notification.rideId = ride.id;
+                notification.message = "\"" + ride.title
+                        + "\" was cancelled, so your pending request was closed.";
+                notification.read = false;
+                notification.createdAt = Timestamp.now();
+                notificationDataAccess.create(notification, new NotificationDataAccess.WriteCallback() {
+                    @Override
+                    public void onSuccess() {}
+
+                    @Override
+                    public void onError(Exception exception) {}
+                });
+            }
+        });
     }
 
     /** Best-effort in-app notification to every rider except the organizer. */

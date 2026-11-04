@@ -44,8 +44,7 @@ public class HistoryService {
 
     private static boolean matches(PlaceInfo location, String text, PlaceInfo center, Double radius) {
         if (radius != null && center != null) return location != null && distanceMiles(location, center) <= radius;
-        return text.trim().isEmpty() || (location != null && location.address != null
-            && location.address.toLowerCase(Locale.ROOT).contains(text.trim().toLowerCase(Locale.ROOT)));
+        return com.trojanrideshare.app.util.KeywordMatcher.matches(location, text);
     }
 
     public static double distanceMiles(PlaceInfo a, PlaceInfo b) {

@@ -88,9 +88,9 @@ service cloud.firestore {
 
       // Posted title, locations, expected cost and max riders never change. Only the organizer
       // changes status, departure time, cost records or ownership; another rider may only remove
-      // themselves (leave) before the cutoff. Riders are only added before departure. Cancelling
-      // happens through a solo organizer leaving, so it follows the leave cutoff. Once
-      // completed/cancelled, only the recorded final cost may still be written.
+      // themselves (leave) before the cutoff. Riders are only added before departure. The
+      // organizer may cancel an active ride at any time. Once completed/cancelled, only the
+      // recorded final cost may still be written.
       allow update: if isUscStudent()
         && !changedKeys().hasAny(['title', 'origin', 'destination', 'maxRiders',
                                   'expectedCost', 'createdAt'])
@@ -99,8 +99,6 @@ service cloud.firestore {
         && (isActive(resource.data.status) || changedKeys().hasOnly(['finalCost']))
         && (!changedKeys().hasAny(['status']) || isValidStatusChange())
         && (!changedKeys().hasAny(['organizerId']) || isOwnershipTransfer())
-        && (request.resource.data.status != 'cancelled' || resource.data.status == 'cancelled'
-            || isBeforeLeaveCutoff())
         && (!changedKeys().hasAny(['participantIds']) || !addsRiders()
             || request.time < resource.data.departureTime);
 

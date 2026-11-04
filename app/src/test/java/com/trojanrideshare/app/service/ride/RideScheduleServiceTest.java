@@ -54,7 +54,7 @@ public class RideScheduleServiceTest {
     }
 
     @Test
-    public void partition_cancelledRideIsExcludedFromBoth() {
+    public void partition_cancelledRideGoesToPastList() {
         Ride future = ride("future", Ride.STATUS_CANCELLED, FUTURE);
         Ride past = ride("past", Ride.STATUS_CANCELLED, PAST);
 
@@ -62,7 +62,7 @@ public class RideScheduleServiceTest {
                 RideScheduleService.partition(Arrays.asList(future, past), NOW);
 
         assertTrue(schedule.upcoming.isEmpty());
-        assertTrue(schedule.completed.isEmpty());
+        assertEquals(Arrays.asList(future, past), schedule.completed);
     }
 
     @Test
@@ -75,7 +75,7 @@ public class RideScheduleServiceTest {
                 RideScheduleService.partition(Arrays.asList(upcoming, done, cancelled), NOW);
 
         assertEquals(Collections.singletonList(upcoming), schedule.upcoming);
-        assertEquals(Collections.singletonList(done), schedule.completed);
+        assertEquals(Arrays.asList(done, cancelled), schedule.completed);
     }
 
     @Test

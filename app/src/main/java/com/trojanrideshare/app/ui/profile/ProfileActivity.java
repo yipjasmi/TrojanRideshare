@@ -68,6 +68,8 @@ public class ProfileActivity extends AppCompatActivity {
     private String targetUserId;
     private boolean isOwnProfile;
     private User profileUser;
+    private final List<Ride> loadedRides = new ArrayList<>();
+    private int selectedTab = 0; // 0 = created by this user, 1 = joined
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,6 +106,20 @@ public class ProfileActivity extends AppCompatActivity {
         completedRidesListView = findViewById(R.id.completedRidesListView);
         signOutButton = findViewById(R.id.profileSignOutButton);
 
+        com.google.android.material.tabs.TabLayout tabs = findViewById(R.id.profileRideTabs);
+        tabs.addOnTabSelectedListener(new com.google.android.material.tabs.TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(com.google.android.material.tabs.TabLayout.Tab tab) {
+                selectedTab = tab.getPosition();
+                renderRides();
+            }
+
+            @Override
+            public void onTabUnselected(com.google.android.material.tabs.TabLayout.Tab tab) {}
+
+            @Override
+            public void onTabReselected(com.google.android.material.tabs.TabLayout.Tab tab) {}
+        });
         upcomingRidesListView.setEmptyView(upcomingEmptyTextView);
         completedRidesListView.setEmptyView(completedEmptyTextView);
 
@@ -119,9 +135,9 @@ public class ProfileActivity extends AppCompatActivity {
             uscIdTextView.setVisibility(View.GONE);
             sharingHintTextView.setVisibility(View.GONE);
             upcomingHeaderTextView.setText("Shared Upcoming Rides");
-            completedHeaderTextView.setText("Shared Completed Rides");
+            completedHeaderTextView.setText("Shared Completed & Cancelled Rides");
             upcomingEmptyTextView.setText("No publicly shared upcoming rides");
-            completedEmptyTextView.setText("No publicly shared completed rides");
+            completedEmptyTextView.setText("No publicly shared completed or cancelled rides");
             View bottomNav = findViewById(R.id.bottomNavigationView);
             if (bottomNav != null) bottomNav.setVisibility(View.GONE);
         }
@@ -234,14 +250,27 @@ public class ProfileActivity extends AppCompatActivity {
                         rides.add(ride);
                     });
 
-                    RideScheduleService.Schedule schedule =
-                            RideScheduleService.partition(rides, Timestamp.now());
-
-                    upcomingRidesListView.setAdapter(new ProfileRideAdapter(schedule.upcoming, false));
-                    completedRidesListView.setAdapter(new ProfileRideAdapter(schedule.completed, true));
+                    loadedRides.clear();
+                    loadedRides.addAll(rides);
+                    renderRides();
                 })
                 .addOnFailureListener(e ->
                         Toast.makeText(this, "Failed to load rides", Toast.LENGTH_SHORT).show());
+    }
+
+    /** Shows the selected tab: rides this user created, or rides they joined. */
+    private void renderRides() {
+        List<Ride> tabRides = new ArrayList<>();
+        for (Ride ride : loadedRides) {
+            boolean created = targetUserId != null && targetUserId.equals(ride.organizerId);
+            if ((selectedTab == 0) == created) {
+                tabRides.add(ride);
+            }
+        }
+        RideScheduleService.Schedule schedule =
+                RideScheduleService.partition(tabRides, Timestamp.now());
+        upcomingRidesListView.setAdapter(new ProfileRideAdapter(schedule.upcoming, false));
+        completedRidesListView.setAdapter(new ProfileRideAdapter(schedule.completed, true));
     }
 
     private void setRideShared(String rideId, boolean shared, MaterialSwitch toggle) {
@@ -317,7 +346,9 @@ public class ProfileActivity extends AppCompatActivity {
                     : DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                             .format(ride.departureTime.toDate());
             String status;
-            if (completedList) {
+            if (Ride.STATUS_CANCELLED.equals(ride.status)) {
+                status = "Cancelled";
+            } else if (completedList) {
                 status = "Completed";
             } else if (RideScheduleService.awaitingCompletion(ride, Timestamp.now())) {
                 status = "Departed, awaiting completion";

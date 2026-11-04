@@ -89,6 +89,23 @@
         android:textSize="13sp"
         android:layout_marginBottom="8dp" />
 
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/profileRideTabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp">
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Created by me" />
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Joined" />
+    </com.google.android.material.tabs.TabLayout>
+
     <TextView
         android:id="@+id/profileUpcomingHeader"
         android:layout_width="wrap_content"
@@ -119,9 +136,10 @@
         android:id="@+id/profileCompletedHeader"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Completed Rides"
+        android:text="Completed &amp; Cancelled Rides"
         android:textSize="18sp"
         android:textStyle="bold"
+        android:layout_marginTop="28dp"
         android:layout_marginBottom="8dp" />
 
     <ListView
@@ -136,7 +154,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:text="No completed rides"
+        android:text="No completed or cancelled rides"
         android:textColor="@android:color/darker_gray"
         android:layout_marginBottom="8dp" />
 

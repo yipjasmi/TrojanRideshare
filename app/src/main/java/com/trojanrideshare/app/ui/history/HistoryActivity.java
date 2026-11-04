@@ -20,6 +20,7 @@ import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.user.UserDataAccess;
 import com.trojanrideshare.app.model.*;
 import com.trojanrideshare.app.service.history.HistoryService;
+import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
 import java.text.DateFormat;
@@ -27,6 +28,7 @@ import java.util.*;
 
 public class HistoryActivity extends AppCompatActivity {
     private final HistoryService service = new HistoryService();
+    private final PaymentService paymentService = new PaymentService();
     private List<Ride> rides = new ArrayList<>();
     private Map<String, Payment> payments = new HashMap<>();
     private String uid;
@@ -92,6 +94,17 @@ public class HistoryActivity extends AppCompatActivity {
             originCenter = null; destinationCenter = null;
             status.setSelection(0); sort.setSelection(0); participant.setSelection(0); render();
         });
+        button("Refresh history and payments", this::load);
+        message = label("", 16);
+        results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL); content.addView(results);
+
+        // Monthly summary sits below the ride list, separated by a divider.
+        View divider = new View(this);
+        divider.setBackgroundColor(0x33000000);
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 2);
+        dividerParams.setMargins(0, 48, 0, 24);
+        content.addView(divider, dividerParams);
         label("Monthly summary", 22);
         Calendar now = Calendar.getInstance();
         month = spinner(new String[]{"January", "February", "March", "April", "May", "June",
@@ -100,9 +113,6 @@ public class HistoryActivity extends AppCompatActivity {
         year = input("Year", true); year.setText(String.valueOf(now.get(Calendar.YEAR)));
         button("Show monthly summary", this::renderSummary);
         summary = label("", 16);
-        button("Refresh history and payments", this::load);
-        message = label("", 16);
-        results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL); content.addView(results);
         if (!BuildConfig.PLACES_API_KEY.trim().isEmpty() && !Places.isInitialized())
             Places.initializeWithNewPlacesApiEnabled(getApplicationContext(), BuildConfig.PLACES_API_KEY);
     }
@@ -178,7 +188,9 @@ public class HistoryActivity extends AppCompatActivity {
             results.removeAllViews();
             message.setText(displayed.isEmpty() ? "No rides match your history filters." : displayed.size() + " rides");
             for (Ride ride : displayed) {
-                TextView row = new TextView(this); row.setTextSize(16); row.setPadding(0, 20, 0, 20);
+                LinearLayout item = new LinearLayout(this); item.setOrientation(LinearLayout.VERTICAL);
+                item.setPadding(0, 20, 0, 20);
+                TextView row = new TextView(this); row.setTextSize(16);
                 String text = fallback(ride.title, "Ride") + "\n" + address(ride.origin) + " → " + address(ride.destination)
                     + "\n" + DateFormat.getDateTimeInstance().format(ride.departureTime.toDate())
                     + "\nStatus: " + statusLabel(ride.status) + " · Participants: " + ride.getAllParticipantIds().size()
@@ -191,7 +203,16 @@ public class HistoryActivity extends AppCompatActivity {
                     text += p == null ? "\nYour share: not assigned yet" : "\nYour share: "
                         + Money.format(Money.toCents(p.amount)) + " · " + (p.paid ? "Paid" : "Unpaid");
                 }
-                row.setText(text); results.addView(row);
+                row.setText(text); item.addView(row);
+                Payment share = payments.get(ride.id);
+                if (Ride.STATUS_COMPLETED.equals(ride.status) && share != null && !share.paid
+                        && uid.equals(share.userId)) {
+                    Button payNow = new Button(this);
+                    payNow.setText("Pay now (" + Money.format(Money.toCents(share.amount)) + ")");
+                    payNow.setOnClickListener(view -> confirmPay(ride, share, payNow));
+                    item.addView(payNow);
+                }
+                results.addView(item);
             }
         } catch (IllegalArgumentException error) {
             results.removeAllViews(); message.setText("Enter a positive radius and choose at least one location using the location buttons.");
@@ -209,6 +230,31 @@ public class HistoryActivity extends AppCompatActivity {
                 + "\n  Paid: " + Money.format(s.paidCostCents) + " · Unpaid: " + Money.format(s.unpaidCostCents)
                 + (s.unassignedShares == 0 ? "" : "\n" + s.unassignedShares + " ride(s) awaiting your cost share; total is incomplete."));
         } catch (NumberFormatException error) { year.setError("Enter a year from 1 to 9999"); }
+    }
+    /** Marks the rider's own share paid after they've paid the organizer outside the app. */
+    private void confirmPay(Ride ride, Payment share, Button payNow) {
+        String amount = Money.format(Money.toCents(share.amount));
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Mark " + amount + " as paid?")
+            .setMessage("Do this after you've paid the organizer for \"" + fallback(ride.title, "this ride")
+                + "\" (cash, Venmo, etc.). You can't undo it, and the organizer will see it as Paid.")
+            .setNegativeButton("Not yet", null)
+            .setPositiveButton("I've paid", (dialog, which) -> {
+                payNow.setEnabled(false);
+                paymentService.markPaid(ride.id, uid, new PaymentService.UpdateCallback() {
+                    public void onSuccess() {
+                        if (isFinishing() || isDestroyed()) return;
+                        Toast.makeText(HistoryActivity.this, "Marked as paid.", Toast.LENGTH_SHORT).show();
+                        load();
+                    }
+                    public void onError(String error) {
+                        if (isFinishing() || isDestroyed()) return;
+                        payNow.setEnabled(true);
+                        Toast.makeText(HistoryActivity.this, error, Toast.LENGTH_LONG).show();
+                    }
+                });
+            })
+            .show();
     }
     private void choosePlace(boolean isOrigin) {
         com.trojanrideshare.app.util.PlacesLocationPicker.show(this, selected -> {

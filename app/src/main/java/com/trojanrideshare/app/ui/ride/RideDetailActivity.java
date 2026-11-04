@@ -53,6 +53,7 @@ public class RideDetailActivity extends AppCompatActivity {
     private Button editRideButton;
     private Button completeRideButton;
     private Button leaveRideButton;
+    private Button cancelRideButton;
 
     private RideDataAccess rideDataAccess;
     private UserDataAccess userDataAccess;
@@ -96,6 +97,8 @@ public class RideDetailActivity extends AppCompatActivity {
         completeRideButton.setOnClickListener(v -> confirmComplete());
         leaveRideButton = findViewById(R.id.leaveRideButton);
         leaveRideButton.setOnClickListener(v -> confirmLeave());
+        cancelRideButton = findViewById(R.id.cancelRideButton);
+        cancelRideButton.setOnClickListener(v -> confirmCancel());
 
         editRideLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -197,6 +200,7 @@ public class RideDetailActivity extends AppCompatActivity {
         editRideButton.setVisibility(View.GONE);
         completeRideButton.setVisibility(View.GONE);
         leaveRideButton.setVisibility(View.GONE);
+        cancelRideButton.setVisibility(View.GONE);
 
         boolean signedIn = currentUserId != null && !currentUserId.trim().isEmpty();
         if (!signedIn) {
@@ -218,8 +222,10 @@ public class RideDetailActivity extends AppCompatActivity {
         }
 
         if (isOrganizer) {
-            // Delays are allowed until the ride is completed; completing waits for departure.
+            // Delays and cancelling are allowed until the ride is completed; completing waits
+            // for departure.
             editRideButton.setVisibility(View.VISIBLE);
+            cancelRideButton.setVisibility(View.VISIBLE);
             if (departed) {
                 completeRideButton.setVisibility(View.VISIBLE);
                 showInfo(getString(R.string.ride_detail_badge_organizer)
@@ -269,6 +275,43 @@ public class RideDetailActivity extends AppCompatActivity {
                         requestToJoin(messageInput.getText() == null
                                 ? "" : messageInput.getText().toString()))
                 .show();
+    }
+
+    private void confirmCancel() {
+        if (ride == null) {
+            return;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Cancel this ride?")
+                .setMessage("Everyone on the ride will see it as Cancelled, and all pending "
+                        + "requests will be closed. This can't be undone.")
+                .setNegativeButton("Keep ride", null)
+                .setPositiveButton("Cancel ride", (dialog, which) -> cancelRide())
+                .show();
+    }
+
+    private void cancelRide() {
+        cancelRideButton.setEnabled(false);
+        editRideService.cancelRide(ride, currentUserId, new EditRideService.Callback() {
+            @Override
+            public void onSuccess() {
+                cancelRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, "Ride cancelled.", Toast.LENGTH_LONG).show();
+                loadRide(ride.id);
+            }
+
+            @Override
+            public void onDenied(String reason) {
+                cancelRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, reason, Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            public void onError(String message) {
+                cancelRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private void confirmLeave() {
