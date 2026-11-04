@@ -8,7 +8,7 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ListView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -57,9 +57,9 @@ public class ProfileActivity extends AppCompatActivity {
     private TextView completedHeaderTextView;
     private TextView upcomingEmptyTextView;
     private TextView completedEmptyTextView;
-    private Button editNicknameButton;
-    private ListView upcomingRidesListView;
-    private ListView completedRidesListView;
+    private View editNicknameButton;
+    private LinearLayout upcomingRidesListView;
+    private LinearLayout completedRidesListView;
     private Button signOutButton;
 
     private FirebaseAuth auth;
@@ -120,8 +120,6 @@ public class ProfileActivity extends AppCompatActivity {
             @Override
             public void onTabReselected(com.google.android.material.tabs.TabLayout.Tab tab) {}
         });
-        upcomingRidesListView.setEmptyView(upcomingEmptyTextView);
-        completedRidesListView.setEmptyView(completedEmptyTextView);
 
         if (isOwnProfile) {
             editNicknameButton.setOnClickListener(v -> showEditNicknameDialog());
@@ -157,18 +155,18 @@ public class ProfileActivity extends AppCompatActivity {
                 .addOnSuccessListener(doc -> {
                     profileUser = doc.toObject(User.class);
                     if (profileUser == null) {
-                        nameTextView.setText("Name: N/A");
+                        nameTextView.setText("Profile not found");
                         nicknameTextView.setText("Nickname: N/A");
                         return;
                     }
                     if (profileUser.sharedRideIds == null) {
                         profileUser.sharedRideIds = new ArrayList<>();
                     }
-                    nameTextView.setText("Name: " + (profileUser.fullName != null ? profileUser.fullName : "N/A"));
+                    nameTextView.setText(profileUser.fullName != null ? profileUser.fullName : "Trojan User");
                     nicknameTextView.setText("Nickname: " + profileUser.getDisplayName());
-                    emailTextView.setText("USC Email: " + (profileUser.email != null ? profileUser.email : "N/A"));
-                    uscIdTextView.setText("USC ID: " + (profileUser.uscId != null ? profileUser.uscId : "N/A"));
-                    gradYearTextView.setText("Expected Graduation: " + profileUser.gradYear);
+                    emailTextView.setText(profileUser.email != null ? profileUser.email : "");
+                    uscIdTextView.setText("USC ID " + (profileUser.uscId != null ? profileUser.uscId : "N/A"));
+                    gradYearTextView.setText("Class of " + profileUser.gradYear);
                     loadUserRides();
                     loadFlags();
                 })
@@ -269,8 +267,24 @@ public class ProfileActivity extends AppCompatActivity {
         }
         RideScheduleService.Schedule schedule =
                 RideScheduleService.partition(tabRides, Timestamp.now());
-        upcomingRidesListView.setAdapter(new ProfileRideAdapter(schedule.upcoming, false));
-        completedRidesListView.setAdapter(new ProfileRideAdapter(schedule.completed, true));
+        fillList(upcomingRidesListView, upcomingEmptyTextView, schedule.upcoming, false);
+        fillList(completedRidesListView, completedEmptyTextView, schedule.completed, true);
+    }
+
+    /** Rows sit in the page itself (no inner scrolling box), separated by thin dividers. */
+    private void fillList(LinearLayout container, TextView emptyView, List<Ride> rides,
+                          boolean completedList) {
+        container.removeAllViews();
+        emptyView.setVisibility(rides.isEmpty() ? View.VISIBLE : View.GONE);
+        LayoutInflater inflater = LayoutInflater.from(this);
+        for (int i = 0; i < rides.size(); i++) {
+            if (i > 0) {
+                container.addView(new com.google.android.material.divider.MaterialDivider(this));
+            }
+            View row = inflater.inflate(R.layout.item_profile_ride, container, false);
+            bindRideRow(row, rides.get(i), completedList);
+            container.addView(row);
+        }
     }
 
     private void setRideShared(String rideId, boolean shared, MaterialSwitch toggle) {
@@ -304,64 +318,53 @@ public class ProfileActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-    private class ProfileRideAdapter extends ArrayAdapter<Ride> {
-        private final boolean completedList;
+    private void bindRideRow(View row, Ride ride, boolean completedList) {
+        ((TextView) row.findViewById(R.id.profileRideTitle)).setText(
+                ride.title == null || ride.title.trim().isEmpty() ? "Untitled ride" : ride.title);
+        ((TextView) row.findViewById(R.id.profileRideRoute)).setText(
+                addressOf(ride.origin) + " → " + addressOf(ride.destination));
+        ((TextView) row.findViewById(R.id.profileRideMeta)).setText(metaLine(ride, completedList));
 
-        ProfileRideAdapter(List<Ride> rides, boolean completedList) {
-            super(ProfileActivity.this, R.layout.item_profile_ride, rides);
-            this.completedList = completedList;
+        MaterialSwitch toggle = row.findViewById(R.id.profileRideShareSwitch);
+        if (isOwnProfile) {
+            toggle.setVisibility(View.VISIBLE);
+            toggle.setOnCheckedChangeListener(null);
+            toggle.setChecked(profileUser != null && profileUser.isRideShared(ride.id));
+            toggle.setOnCheckedChangeListener((button, checked) ->
+                    setRideShared(ride.id, checked, toggle));
+        } else {
+            toggle.setVisibility(View.GONE);
         }
+        row.setBackgroundResource(outValueSelectable());
+        row.setOnClickListener(v -> openRide(ride));
+    }
 
-        @NonNull
-        @Override
-        public View getView(int position, View convertView, @NonNull ViewGroup parent) {
-            View row = convertView != null ? convertView
-                    : LayoutInflater.from(getContext()).inflate(R.layout.item_profile_ride, parent, false);
-            Ride ride = getItem(position);
-            if (ride == null) return row;
+    private int outValueSelectable() {
+        android.util.TypedValue value = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, value, true);
+        return value.resourceId;
+    }
 
-            ((TextView) row.findViewById(R.id.profileRideTitle)).setText(
-                    ride.title == null || ride.title.trim().isEmpty() ? "Untitled ride" : ride.title);
-            ((TextView) row.findViewById(R.id.profileRideRoute)).setText(
-                    addressOf(ride.origin) + " → " + addressOf(ride.destination));
-            ((TextView) row.findViewById(R.id.profileRideMeta)).setText(metaLine(ride));
-
-            MaterialSwitch toggle = row.findViewById(R.id.profileRideShareSwitch);
-            if (isOwnProfile) {
-                toggle.setVisibility(View.VISIBLE);
-                toggle.setOnCheckedChangeListener(null);
-                toggle.setChecked(profileUser != null && profileUser.isRideShared(ride.id));
-                toggle.setOnCheckedChangeListener((button, checked) ->
-                        setRideShared(ride.id, checked, toggle));
-            } else {
-                toggle.setVisibility(View.GONE);
-            }
-
-            row.setOnClickListener(v -> openRide(ride));
-            return row;
+    private String metaLine(Ride ride, boolean completedList) {
+        String when = ride.departureTime == null ? "Time TBD"
+                : DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                        .format(ride.departureTime.toDate());
+        String status;
+        if (Ride.STATUS_CANCELLED.equals(ride.status)) {
+            status = "Cancelled";
+        } else if (completedList) {
+            status = "Completed";
+        } else if (RideScheduleService.awaitingCompletion(ride, Timestamp.now())) {
+            status = "Departed, awaiting completion";
+        } else if (Ride.STATUS_DELAYED.equals(ride.status)) {
+            status = "Delayed";
+        } else {
+            status = "On Time";
         }
-
-        private String metaLine(Ride ride) {
-            String when = ride.departureTime == null ? "Time TBD"
-                    : DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                            .format(ride.departureTime.toDate());
-            String status;
-            if (Ride.STATUS_CANCELLED.equals(ride.status)) {
-                status = "Cancelled";
-            } else if (completedList) {
-                status = "Completed";
-            } else if (RideScheduleService.awaitingCompletion(ride, Timestamp.now())) {
-                status = "Departed, awaiting completion";
-            } else if (Ride.STATUS_DELAYED.equals(ride.status)) {
-                status = "Delayed";
-            } else {
-                status = "On Time";
-            }
-            int riders = ride.participantIds == null ? 0 : ride.participantIds.size();
-            String role = targetUserId != null && targetUserId.equals(ride.organizerId)
-                    ? (isOwnProfile ? " · You organize" : " · Organizer") : "";
-            return when + " · " + status + " · " + riders + "/" + ride.maxRiders + " riders" + role;
-        }
+        int riders = ride.participantIds == null ? 0 : ride.participantIds.size();
+        String role = targetUserId != null && targetUserId.equals(ride.organizerId)
+                ? (isOwnProfile ? " · You organize" : " · Organizer") : "";
+        return when + " · " + status + " · " + riders + "/" + ride.maxRiders + " riders" + role;
     }
 
     private static String addressOf(com.trojanrideshare.app.model.PlaceInfo place) {
