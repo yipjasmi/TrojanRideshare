@@ -172,7 +172,44 @@ public class RideDetailActivity extends AppCompatActivity {
         setText(R.id.detailStatus, getString(
                 R.string.ride_detail_status_format, statusLine(ride)));
 
+        renderRiders(ride);
         configureAction(ride, availableSeats);
+    }
+
+    /** One tappable row per rider (organizer first), opening that person's profile. */
+    private void renderRiders(Ride ride) {
+        LinearLayout container = findViewById(R.id.detailRidersContainer);
+        container.removeAllViews();
+        for (String riderId : ride.getAllParticipantIds()) {
+            boolean organizer = riderId.equals(ride.organizerId);
+            boolean me = riderId.equals(currentUserId);
+            TextView row = new TextView(this);
+            row.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge);
+            int pad = (int) (10 * getResources().getDisplayMetrics().density);
+            row.setPadding(0, pad, 0, pad);
+            android.util.TypedValue ripple = new android.util.TypedValue();
+            getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);
+            row.setBackgroundResource(ripple.resourceId);
+            String suffix = (organizer ? " · Organizer" : "") + (me ? " (you)" : "");
+            row.setText("👤 Loading…" + suffix);
+            row.setOnClickListener(v -> {
+                Intent intent = new Intent(this, ProfileActivity.class);
+                intent.putExtra(ProfileActivity.EXTRA_USER_ID, riderId);
+                startActivity(intent);
+            });
+            container.addView(row);
+            userDataAccess.getById(riderId, new UserDataAccess.SingleCallback() {
+                @Override
+                public void onSuccess(User user) {
+                    row.setText("👤 " + (user == null ? "A student" : user.getDisplayName()) + suffix);
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    row.setText("👤 A student" + suffix);
+                }
+            });
+        }
     }
 
     private void loadOrganizerName(String organizerId) {
