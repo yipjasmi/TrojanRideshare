@@ -1,18 +1,14 @@
 package com.trojanrideshare.app.service.ride;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import com.google.firebase.Timestamp;
-import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 
 import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -22,6 +18,10 @@ public class EditRideServiceTest {
     private static final Timestamp NOW = new Timestamp(new Date(1_700_000_000_000L));
     private static final Timestamp FUTURE =
             new Timestamp(new Date(1_700_000_000_000L + 86_400_000L));
+    private static final Timestamp LATER =
+            new Timestamp(new Date(1_700_000_000_000L + 2 * 86_400_000L));
+    private static final Timestamp PAST =
+            new Timestamp(new Date(1_700_000_000_000L - 86_400_000L));
 
     @Test
     public void authorizationError_allowsOrganizer() {
@@ -46,35 +46,75 @@ public class EditRideServiceTest {
     }
 
     @Test
-    public void validateForEdit_acceptsValidChange() {
-        ValidationResult result = EditRideService.validateForEdit(
-                input(4), ride(4, one(ORGANIZER)), NOW);
+    public void delayError_allowsLaterFutureTime() {
+        Ride ride = ride(4, one(ORGANIZER));
+        ride.departureTime = FUTURE;
 
-        assertTrue(result.isValid());
+        assertNull(EditRideService.delayError(ride, LATER, ORGANIZER, NOW));
     }
 
     @Test
-    public void validateForEdit_rejectsMaxBelowCurrentRiders() {
-        // 3 riders already aboard; organizer tries to lower the cap to 2.
-        Ride existing = ride(4, Arrays.asList(ORGANIZER, "rider-a", "rider-b"));
+    public void delayError_rejectsTimeNotLaterThanCurrent() {
+        Ride ride = ride(4, one(ORGANIZER));
+        ride.departureTime = LATER;
 
-        ValidationResult result = EditRideService.validateForEdit(input(2), existing, NOW);
-
-        assertFalse(result.isValid());
-        assertEquals(
-                "Max riders cannot be fewer than the current riders (3)",
-                result.errorFor(RideValidator.FIELD_MAX_RIDERS));
+        assertEquals(EditRideService.REASON_DELAY_NOT_LATER,
+                EditRideService.delayError(ride, FUTURE, ORGANIZER, NOW));
     }
 
     @Test
-    public void validateForEdit_stillEnforcesBaseRules() {
-        // maxRiders of 1 is below the allowed range, caught by the base validator.
-        ValidationResult result = EditRideService.validateForEdit(
-                input(1), ride(4, one(ORGANIZER)), NOW);
+    public void delayError_rejectsPastTimeAndMissingTime() {
+        Ride ride = ride(4, one(ORGANIZER));
+        ride.departureTime = PAST;
 
-        assertEquals(
-                RideValidator.ERROR_RIDERS_RANGE,
-                result.errorFor(RideValidator.FIELD_MAX_RIDERS));
+        assertEquals(EditRideService.REASON_DELAY_IN_PAST,
+                EditRideService.delayError(ride, PAST, ORGANIZER, NOW));
+        assertEquals(EditRideService.REASON_DELAY_TIME_REQUIRED,
+                EditRideService.delayError(ride, null, ORGANIZER, NOW));
+    }
+
+    @Test
+    public void delayError_blocksNonOrganizerAndFinalRides() {
+        Ride ride = ride(4, one(ORGANIZER));
+        ride.departureTime = FUTURE;
+        assertEquals(EditRideService.REASON_NOT_ORGANIZER,
+                EditRideService.delayError(ride, LATER, "someone-else", NOW));
+
+        ride.status = Ride.STATUS_COMPLETED;
+        assertEquals(EditRideService.REASON_FINAL,
+                EditRideService.delayError(ride, LATER, ORGANIZER, NOW));
+        ride.status = Ride.STATUS_CANCELLED;
+        assertEquals(EditRideService.REASON_FINAL,
+                EditRideService.delayError(ride, LATER, ORGANIZER, NOW));
+    }
+
+    @Test
+    public void completeError_onlyAfterDeparture() {
+        Ride ride = ride(4, one(ORGANIZER));
+        ride.departureTime = FUTURE;
+        assertEquals(EditRideService.REASON_NOT_DEPARTED,
+                EditRideService.completeError(ride, ORGANIZER, NOW));
+
+        ride.departureTime = PAST;
+        assertNull(EditRideService.completeError(ride, ORGANIZER, NOW));
+
+        ride.status = Ride.STATUS_DELAYED;
+        assertNull(EditRideService.completeError(ride, ORGANIZER, NOW));
+    }
+
+    @Test
+    public void completeError_blocksNonOrganizerAndFinalRides() {
+        Ride ride = ride(4, one(ORGANIZER));
+        ride.departureTime = PAST;
+        assertEquals(EditRideService.REASON_NOT_ORGANIZER,
+                EditRideService.completeError(ride, "someone-else", NOW));
+
+        ride.status = Ride.STATUS_COMPLETED;
+        assertEquals(EditRideService.REASON_FINAL,
+                EditRideService.completeError(ride, ORGANIZER, NOW));
+        ride.status = Ride.STATUS_CANCELLED;
+        assertEquals(EditRideService.REASON_FINAL,
+                EditRideService.completeError(ride, ORGANIZER, NOW));
     }
 
     private static List<String> one(String id) {
@@ -86,18 +126,8 @@ public class EditRideServiceTest {
         ride.id = "ride-1";
         ride.organizerId = ORGANIZER;
         ride.maxRiders = maxRiders;
+        ride.status = Ride.STATUS_ON_TIME;
         ride.participantIds = new ArrayList<>(participantIds);
         return ride;
-    }
-
-    private static RideInput input(int maxRiders) {
-        return new RideInput("USC to LAX", place("a"), place("b"), FUTURE, maxRiders, 20.0);
-    }
-
-    private static PlaceInfo place(String placeId) {
-        PlaceInfo place = new PlaceInfo();
-        place.placeId = placeId;
-        place.address = placeId + " address";
-        return place;
     }
 }

@@ -9,7 +9,8 @@ import java.util.Map;
 /**
  * Pure validation for ride creation/editing, enforcing the acceptance criteria:
  * all required fields present, origin/destination are valid picked locations, and the
- * maximum number of riders is between {@value #MIN_RIDERS} and {@value #MAX_RIDERS}.
+ * maximum number of riders is between {@value #MIN_RIDERS} and {@value #MAX_RIDERS}, and the
+ * expected cost is greater than zero with at most two decimal places.
  *
  * <p>No Android/Firebase dependencies beyond the plain data types, so it is covered by
  * {@code RideValidatorTest}.
@@ -37,7 +38,9 @@ public final class RideValidator {
     public static final String ERROR_RIDERS_RANGE =
             "Number of riders must be between " + MIN_RIDERS + " and " + MAX_RIDERS;
     public static final String ERROR_COST_REQUIRED = "Expected cost is required";
-    public static final String ERROR_COST_NEGATIVE = "Expected cost cannot be negative";
+    public static final String ERROR_COST_NOT_POSITIVE = "Expected cost must be greater than $0.00";
+    public static final String ERROR_COST_DECIMALS =
+            "Expected cost can have at most two decimal places";
 
     private RideValidator() {}
 
@@ -78,11 +81,21 @@ public final class RideValidator {
 
         if (input.expectedCost == null) {
             errors.put(FIELD_EXPECTED_COST, ERROR_COST_REQUIRED);
-        } else if (input.expectedCost < 0) {
-            errors.put(FIELD_EXPECTED_COST, ERROR_COST_NEGATIVE);
+        } else if (!(input.expectedCost > 0)) {
+            errors.put(FIELD_EXPECTED_COST, ERROR_COST_NOT_POSITIVE);
+        } else if (!hasAtMostTwoDecimals(input.expectedCost)) {
+            errors.put(FIELD_EXPECTED_COST, ERROR_COST_DECIMALS);
         }
 
         return new ValidationResult(errors);
+    }
+
+    /** True for 12, 12.5 and 12.50; false for 12.505. */
+    public static boolean hasAtMostTwoDecimals(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            return false;
+        }
+        return java.math.BigDecimal.valueOf(value).stripTrailingZeros().scale() <= 2;
     }
 
     private static boolean isValidPlace(PlaceInfo place) {

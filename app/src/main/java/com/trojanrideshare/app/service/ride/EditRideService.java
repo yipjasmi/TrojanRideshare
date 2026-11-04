@@ -12,17 +12,22 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Lets the organizer edit a ride's details or change its status (SRS step 10-11).
- * Only the organizer may act. Cancelling sets the "cancelled" status, which drops the ride
- * from discovery and everyone's upcoming list.
+ * Organizer-only activity changes on a posted ride.
+ *
+ * <p>Title, date, locations, expected cost and maximum riders are fixed once posted. The
+ * organizer may only:
+ * <ul>
+ *   <li>mark the ride Delayed with a new, later departure time (the new time replaces
+ *       {@code departureTime}, so search and sorting use it; the posted time is kept in
+ *       {@code originalDepartureTime});</li>
+ *   <li>mark it Completed, only after its departure time has passed.</li>
+ * </ul>
+ * Completed and Cancelled are final and cannot be undone.
  */
 public class EditRideService {
     public interface Callback {
         /** The change was saved. */
         void onSuccess();
-
-        /** The edited details failed validation; nothing was saved. */
-        void onInvalid(ValidationResult result);
 
         /** The action was not allowed; {@code reason} explains why. */
         void onDenied(String reason);
@@ -31,8 +36,16 @@ public class EditRideService {
         void onError(String message);
     }
 
-    public static final String REASON_NOT_ORGANIZER = "Only the organizer can edit this ride.";
+    public static final String REASON_NOT_ORGANIZER = "Only the organizer can change this ride.";
     public static final String REASON_UNAVAILABLE = "This ride is unavailable.";
+    public static final String REASON_FINAL =
+            "Completed and cancelled rides can't be changed.";
+    public static final String REASON_DELAY_TIME_REQUIRED = "Pick the new departure time.";
+    public static final String REASON_DELAY_IN_PAST = "The new departure time must be in the future.";
+    public static final String REASON_DELAY_NOT_LATER =
+            "The new departure time must be later than the current one.";
+    public static final String REASON_NOT_DEPARTED =
+            "A ride can only be completed after its departure time.";
 
     private static final String GENERIC_ERROR = "Unable to save your changes. Please try again.";
 
@@ -48,38 +61,27 @@ public class EditRideService {
         this.notificationDataAccess = notificationDataAccess;
     }
 
-    public void updateRide(
-            Ride existing,
-            RideInput input,
-            String newStatus,
-            String actingUserId,
-            Callback callback) {
-        String authorization = authorizationError(existing, actingUserId);
-        if (authorization != null) {
-            callback.onDenied(authorization);
-            return;
-        }
-
-        ValidationResult validation = validateForEdit(input, existing, Timestamp.now());
-        if (!validation.isValid()) {
-            callback.onInvalid(validation);
+    /** Marks the ride Delayed and moves its departure to {@code newDeparture}. */
+    public void markDelayed(
+            Ride existing, Timestamp newDeparture, String actingUserId, Callback callback) {
+        String error = delayError(existing, newDeparture, actingUserId, Timestamp.now());
+        if (error != null) {
+            callback.onDenied(error);
             return;
         }
 
         Map<String, Object> updates = new HashMap<>();
-        updates.put("title", input.title.trim());
-        updates.put("origin", input.origin);
-        updates.put("destination", input.destination);
-        updates.put("departureTime", input.departureTime);
-        updates.put("maxRiders", input.maxRiders);
-        updates.put("expectedCost", input.expectedCost);
-        updates.put("status", newStatus);
+        updates.put("status", Ride.STATUS_DELAYED);
+        updates.put("departureTime", newDeparture);
+        if (existing.originalDepartureTime == null) {
+            updates.put("originalDepartureTime", existing.departureTime);
+        }
 
         rideDataAccess.updateRide(existing.id, updates, new RideDataAccess.WriteCallback() {
             @Override
             public void onSuccess() {
                 notifyRiders(existing, Notification.TYPE_RIDE_UPDATED,
-                        "\"" + input.title.trim() + "\" was updated.");
+                        "\"" + existing.title + "\" is delayed to a new departure time.");
                 callback.onSuccess();
             }
 
@@ -90,10 +92,42 @@ public class EditRideService {
         });
     }
 
+    /** Marks the ride Completed. Allowed only for the organizer, after departure. */
+    public void completeRide(Ride existing, String actingUserId, Callback callback) {
+        String error = completeError(existing, actingUserId, Timestamp.now());
+        if (error != null) {
+            callback.onDenied(error);
+            return;
+        }
+
+        rideDataAccess.updateStatus(
+                existing.id, Ride.STATUS_COMPLETED, new RideDataAccess.WriteCallback() {
+                    @Override
+                    public void onSuccess() {
+                        notifyRiders(existing, Notification.TYPE_RIDE_UPDATED,
+                                "\"" + existing.title + "\" was marked completed.");
+                        callback.onSuccess();
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        callback.onError(GENERIC_ERROR);
+                    }
+                });
+    }
+
+    /**
+     * Cancels an active ride. There is no standalone cancel button: cancellation happens when a
+     * solo organizer leaves their ride (Feature 3).
+     */
     public void cancelRide(Ride existing, String actingUserId, Callback callback) {
         String authorization = authorizationError(existing, actingUserId);
         if (authorization != null) {
             callback.onDenied(authorization);
+            return;
+        }
+        if (!existing.isActive()) {
+            callback.onDenied(REASON_FINAL);
             return;
         }
 
@@ -140,7 +174,7 @@ public class EditRideService {
         }
     }
 
-    /** Returns a reason the user may not edit the ride, or {@code null} if they may. */
+    /** Returns a reason the user may not change the ride, or {@code null} if they may. */
     public static String authorizationError(Ride ride, String actingUserId) {
         if (ride == null || ride.id == null
                 || actingUserId == null || actingUserId.trim().isEmpty()) {
@@ -152,21 +186,40 @@ public class EditRideService {
         return null;
     }
 
-    /**
-     * Validates edited details: all the create rules, plus the maximum number of riders may
-     * not drop below the number of riders already on the ride.
-     */
-    public static ValidationResult validateForEdit(RideInput input, Ride existing, Timestamp now) {
-        ValidationResult base = RideValidator.validate(input, now);
-        if (!base.isValid() || input == null || input.maxRiders == null || existing == null) {
-            return base;
+    /** Returns why the delay can't be applied, or {@code null} if it can. */
+    public static String delayError(
+            Ride ride, Timestamp newDeparture, String actingUserId, Timestamp now) {
+        String authorization = authorizationError(ride, actingUserId);
+        if (authorization != null) {
+            return authorization;
         }
-        int currentRiders = existing.participantIds == null ? 0 : existing.participantIds.size();
-        if (input.maxRiders < currentRiders) {
-            return new ValidationResult(Collections.singletonMap(
-                    RideValidator.FIELD_MAX_RIDERS,
-                    "Max riders cannot be fewer than the current riders (" + currentRiders + ")"));
+        if (!ride.isActive()) {
+            return REASON_FINAL;
         }
-        return base;
+        if (newDeparture == null) {
+            return REASON_DELAY_TIME_REQUIRED;
+        }
+        if (now != null && newDeparture.compareTo(now) <= 0) {
+            return REASON_DELAY_IN_PAST;
+        }
+        if (ride.departureTime != null && newDeparture.compareTo(ride.departureTime) <= 0) {
+            return REASON_DELAY_NOT_LATER;
+        }
+        return null;
+    }
+
+    /** Returns why the ride can't be completed now, or {@code null} if it can. */
+    public static String completeError(Ride ride, String actingUserId, Timestamp now) {
+        String authorization = authorizationError(ride, actingUserId);
+        if (authorization != null) {
+            return authorization;
+        }
+        if (!ride.isActive()) {
+            return REASON_FINAL;
+        }
+        if (!ride.hasDeparted(now)) {
+            return REASON_NOT_DEPARTED;
+        }
+        return null;
     }
 }

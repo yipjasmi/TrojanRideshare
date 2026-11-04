@@ -34,13 +34,45 @@ service cloud.firestore {
     }
 
     match /rides/{rideId} {
-      allow read, create, delete: if isUscStudent();
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
 
-      // Only the organizer records the cost or hands the ride to someone else.
+      function isActive(status) {
+        return status == 'onTime' || status == 'delayed';
+      }
+
+      // Completed and Cancelled are final. Completing waits for the (possibly delayed) departure.
+      function isValidStatusChange() {
+        let next = request.resource.data.status;
+        return isActive(resource.data.status)
+          && (next == 'onTime' || next == 'delayed' || next == 'cancelled'
+              || (next == 'completed' && resource.data.departureTime <= request.time));
+      }
+
+      allow read: if isUscStudent();
+
+      allow create: if isUscStudent()
+        && request.resource.data.organizerId == uid()
+        && request.resource.data.status == 'onTime'
+        && request.resource.data.participantIds == [uid()]
+        && request.resource.data.expectedCost is number
+        && request.resource.data.expectedCost > 0
+        && request.resource.data.maxRiders is int
+        && request.resource.data.maxRiders >= 2
+        && request.resource.data.maxRiders <= 6;
+
+      // Posted title, locations, expected cost and max riders never change. Only the organizer
+      // changes status, departure time, cost records or ownership; others may only change
+      // membership. Once completed/cancelled, only the recorded final cost may still be written.
       allow update: if isUscStudent()
-        && (resource.data.organizerId == uid()
-            || !request.resource.data.diff(resource.data).affectedKeys()
-                   .hasAny(['finalCost', 'organizerId']));
+        && !changedKeys().hasAny(['title', 'origin', 'destination', 'maxRiders',
+                                  'expectedCost', 'createdAt'])
+        && (resource.data.organizerId == uid() || changedKeys().hasOnly(['participantIds']))
+        && (isActive(resource.data.status) || changedKeys().hasOnly(['finalCost']))
+        && (!changedKeys().hasAny(['status']) || isValidStatusChange());
+
+      allow delete: if false;
     }
 
     // One document per person per ride, id is {rideId}_{userId}.

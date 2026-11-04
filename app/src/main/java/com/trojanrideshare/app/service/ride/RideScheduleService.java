@@ -10,10 +10,9 @@ import java.util.List;
 /**
  * Splits a user's rides into upcoming and completed for their profile (SRS step 12).
  *
- * <p>Completion is a client-side lazy transition: a ride whose departure time has passed is
- * treated as completed even if its stored status has not yet been flipped, and
- * {@link #load} best-effort writes the "completed" status back. Cancelled rides appear in
- * neither list.
+ * <p>Only the organizer completes a ride (after departure), so a ride counts as completed only
+ * once its status is "completed". A departed ride that hasn't been completed yet stays in
+ * upcoming. Cancelled rides appear in neither list.
  */
 public class RideScheduleService {
     public interface Callback {
@@ -49,9 +48,7 @@ public class RideScheduleService {
         rideDataAccess.getRidesForUser(userId, new RideDataAccess.Callback() {
             @Override
             public void onSuccess(List<Ride> rides) {
-                Timestamp now = Timestamp.now();
-                flipLazilyCompleted(rides, now);
-                callback.onSuccess(partition(rides, now));
+                callback.onSuccess(partition(rides, Timestamp.now()));
             }
 
             @Override
@@ -59,25 +56,6 @@ public class RideScheduleService {
                 callback.onError("Unable to load your rides. Please try again.");
             }
         });
-    }
-
-    private void flipLazilyCompleted(List<Ride> rides, Timestamp now) {
-        if (rides == null) {
-            return;
-        }
-        for (Ride ride : rides) {
-            if (ride != null && ride.id != null && needsCompletion(ride, now)) {
-                // Best effort: the profile already treats it as completed regardless.
-                rideDataAccess.updateStatus(ride.id, Ride.STATUS_COMPLETED,
-                        new RideDataAccess.WriteCallback() {
-                            @Override
-                            public void onSuccess() {}
-
-                            @Override
-                            public void onError(Exception exception) {}
-                        });
-            }
-        }
     }
 
     /** Partitions rides into upcoming vs completed; cancelled rides are excluded from both. */
@@ -91,7 +69,7 @@ public class RideScheduleService {
             if (ride == null || Ride.STATUS_CANCELLED.equals(ride.status)) {
                 continue;
             }
-            if (Ride.STATUS_COMPLETED.equals(ride.status) || hasDeparted(ride, now)) {
+            if (Ride.STATUS_COMPLETED.equals(ride.status)) {
                 completed.add(ride);
             } else {
                 upcoming.add(ride);
@@ -100,18 +78,8 @@ public class RideScheduleService {
         return new Schedule(upcoming, completed);
     }
 
-    /** True if an active ride has already departed and should be flipped to completed. */
-    public static boolean needsCompletion(Ride ride, Timestamp now) {
-        if (ride == null) {
-            return false;
-        }
-        boolean active = Ride.STATUS_ON_TIME.equals(ride.status)
-                || Ride.STATUS_DELAYED.equals(ride.status);
-        return active && hasDeparted(ride, now);
-    }
-
-    private static boolean hasDeparted(Ride ride, Timestamp now) {
-        return ride.departureTime != null && now != null
-                && ride.departureTime.compareTo(now) <= 0;
+    /** True if an active ride has departed and is waiting for its organizer to complete it. */
+    public static boolean awaitingCompletion(Ride ride, Timestamp now) {
+        return ride != null && ride.isActive() && ride.hasDeparted(now);
     }
 }
