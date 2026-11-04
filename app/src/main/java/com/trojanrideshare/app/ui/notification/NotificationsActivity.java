@@ -12,11 +12,13 @@ import android.widget.TextView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.notification.NotificationDataAccess;
 import com.trojanrideshare.app.model.Notification;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.Collections;
@@ -37,8 +39,10 @@ public class NotificationsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_notifications);
+        SystemBarsHelper.applyPadding(this);
 
-        findViewById(R.id.notificationsBack).setOnClickListener(v -> navigateToHome());
+        MaterialToolbar toolbar = findViewById(R.id.notificationsToolbar);
+        toolbar.setNavigationOnClickListener(v -> navigateToHome());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {

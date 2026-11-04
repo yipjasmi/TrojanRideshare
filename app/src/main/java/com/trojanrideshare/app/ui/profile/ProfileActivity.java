@@ -15,6 +15,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.firebase.Timestamp;
@@ -29,6 +30,7 @@ import com.trojanrideshare.app.service.ride.RideScheduleService;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -45,7 +47,7 @@ public class ProfileActivity extends AppCompatActivity {
     public static final String EXTRA_USER_ID = "userId";
     private static final int MAX_NICKNAME_LENGTH = 30;
 
-    private TextView titleTextView;
+    private MaterialToolbar toolbar;
     private TextView nameTextView;
     private TextView nicknameTextView;
     private TextView emailTextView;
@@ -75,6 +77,7 @@ public class ProfileActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile);
+        SystemBarsHelper.applyPadding(this);
 
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
@@ -89,7 +92,7 @@ public class ProfileActivity extends AppCompatActivity {
         isOwnProfile = extraUserId == null || extraUserId.equals(currentUserId);
         targetUserId = isOwnProfile ? currentUserId : extraUserId;
 
-        titleTextView = findViewById(R.id.profileTitleTextView);
+        toolbar = findViewById(R.id.profileToolbar);
         nameTextView = findViewById(R.id.profileNameTextView);
         nicknameTextView = findViewById(R.id.profileNicknameTextView);
         emailTextView = findViewById(R.id.profileEmailTextView);
@@ -121,12 +124,21 @@ public class ProfileActivity extends AppCompatActivity {
             public void onTabReselected(com.google.android.material.tabs.TabLayout.Tab tab) {}
         });
 
+        // Back arrow whenever another screen opened this profile (a rider row, even your own);
+        // the Profile tab itself has none.
+        if (extraUserId == null) {
+            toolbar.setNavigationIcon(null);
+        } else {
+            toolbar.setNavigationOnClickListener(v -> finish());
+        }
+
         if (isOwnProfile) {
             editNicknameButton.setOnClickListener(v -> showEditNicknameDialog());
             signOutButton.setOnClickListener(v -> signOut());
             BottomNavHelper.setupBottomNav(this, R.id.nav_profile);
         } else {
-            titleTextView.setText("User Profile");
+            toolbar.setTitle("User Profile");
+            BottomNavHelper.setupBottomNav(this, BottomNavHelper.NO_TAB);
             com.google.android.material.tabs.TabLayout otherTabs = findViewById(R.id.profileRideTabs);
             com.google.android.material.tabs.TabLayout.Tab organizedTab = otherTabs.getTabAt(0);
             if (organizedTab != null) organizedTab.setText("Organized");
@@ -139,8 +151,6 @@ public class ProfileActivity extends AppCompatActivity {
             completedHeaderTextView.setText("Shared Completed & Cancelled Rides");
             upcomingEmptyTextView.setText("No publicly shared upcoming rides");
             completedEmptyTextView.setText("No publicly shared completed or cancelled rides");
-            View bottomNav = findViewById(R.id.bottomNavigationView);
-            if (bottomNav != null) bottomNav.setVisibility(View.GONE);
         }
     }
 

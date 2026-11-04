@@ -15,6 +15,7 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 /** Email/password login. New users go to {@link SignUpActivity}. */
 public class LoginActivity extends AppCompatActivity {
@@ -27,6 +28,7 @@ public class LoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
+        SystemBarsHelper.applyPadding(this);
         auth = FirebaseAuth.getInstance();
 
         emailEditText = findViewById(R.id.loginEmailEditText);

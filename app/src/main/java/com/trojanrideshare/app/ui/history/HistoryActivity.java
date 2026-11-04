@@ -18,8 +18,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.chip.ChipGroup;
@@ -39,6 +37,7 @@ import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
 import com.trojanrideshare.app.util.PlaceResolver;
 import com.trojanrideshare.app.util.PlacesLocationPicker;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -90,11 +89,7 @@ public class HistoryActivity extends AppCompatActivity {
     public void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_history);
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.historyRoot), (view, insets) -> {
-            androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-            return insets;
-        });
+        SystemBarsHelper.applyPadding(this);
         BottomNavHelper.setupBottomNav(this, R.id.nav_history);
 
         origin = findViewById(R.id.historyOriginInput);

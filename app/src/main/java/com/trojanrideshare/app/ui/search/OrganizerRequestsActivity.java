@@ -13,6 +13,7 @@ import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -28,6 +29,7 @@ import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.HashMap;
@@ -63,6 +65,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_organizer_requests);
+        SystemBarsHelper.applyPadding(this);
 
         joinRequestService = new JoinRequestService();
         loadingIndicator = findViewById(R.id.organizerRequestsLoading);
@@ -72,7 +75,8 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         myRequestsContainer = findViewById(R.id.myRequestsContainer);
         organizerId = getOrganizerId();
 
-        findViewById(R.id.organizerRequestsBack).setOnClickListener(view -> navigateToHome());
+        MaterialToolbar toolbar = findViewById(R.id.organizerRequestsToolbar);
+        toolbar.setNavigationOnClickListener(view -> navigateToHome());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {

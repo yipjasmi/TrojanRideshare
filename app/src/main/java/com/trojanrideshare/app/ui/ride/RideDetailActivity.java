@@ -13,6 +13,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -31,6 +32,8 @@ import com.trojanrideshare.app.service.ride.EditRideService;
 import com.trojanrideshare.app.service.ride.LeaveRideService;
 import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
+import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
 import java.util.Date;
@@ -69,6 +72,8 @@ public class RideDetailActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_ride_detail);
+        SystemBarsHelper.applyPadding(this);
+        BottomNavHelper.setupBottomNav(this, BottomNavHelper.NO_TAB);
 
         rideDataAccess = new RideDataAccess();
         userDataAccess = new UserDataAccess();
@@ -90,7 +95,8 @@ public class RideDetailActivity extends AppCompatActivity {
         infoMessage = findViewById(R.id.detailInfoMessage);
         joinButton = findViewById(R.id.joinButton);
         editRideButton = findViewById(R.id.editRideButton);
-        findViewById(R.id.rideDetailBack).setOnClickListener(v -> finish());
+        MaterialToolbar toolbar = findViewById(R.id.rideDetailToolbar);
+        toolbar.setNavigationOnClickListener(v -> finish());
         joinButton.setOnClickListener(v -> showJoinDialog());
         completeRideButton = findViewById(R.id.completeRideButton);
         editRideButton.setOnClickListener(v -> openEditRide());
@@ -190,8 +196,13 @@ public class RideDetailActivity extends AppCompatActivity {
             android.util.TypedValue ripple = new android.util.TypedValue();
             getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);
             row.setBackgroundResource(ripple.resourceId);
+            row.setMinHeight((int) (48 * getResources().getDisplayMetrics().density));
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setCompoundDrawablePadding((int) (12 * getResources().getDisplayMetrics().density));
+            row.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    R.drawable.ic_person, 0, R.drawable.ic_chevron_right, 0);
             String suffix = (organizer ? " · Organizer" : "") + (me ? " (you)" : "");
-            row.setText("👤 Loading…" + suffix);
+            row.setText("Loading…" + suffix);
             row.setOnClickListener(v -> {
                 Intent intent = new Intent(this, ProfileActivity.class);
                 intent.putExtra(ProfileActivity.EXTRA_USER_ID, riderId);
@@ -201,12 +212,12 @@ public class RideDetailActivity extends AppCompatActivity {
             userDataAccess.getById(riderId, new UserDataAccess.SingleCallback() {
                 @Override
                 public void onSuccess(User user) {
-                    row.setText("👤 " + (user == null ? "A student" : user.getDisplayName()) + suffix);
+                    row.setText((user == null ? "A student" : user.getDisplayName()) + suffix);
                 }
 
                 @Override
                 public void onError(Exception exception) {
-                    row.setText("👤 A student" + suffix);
+                    row.setText("A student" + suffix);
                 }
             });
         }
