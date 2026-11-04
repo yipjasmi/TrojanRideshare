@@ -117,29 +117,33 @@ public class MainActivity extends AppCompatActivity {
         );
 
         BottomNavHelper.setupBottomNav(this, R.id.nav_home);
+    }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadGreeting();
+    }
+
+    /** Greets the user by their displayed nickname; refreshed on resume so edits show up. */
+    private void loadGreeting() {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
-        if (currentUser != null) {
-            FirebaseFirestore.getInstance().collection("users").document(currentUser.getUid())
-                    .get()
-                    .addOnSuccessListener(documentSnapshot -> {
-                        User user = documentSnapshot.toObject(User.class);
-                        String name = (user != null && user.fullName != null) ? user.fullName : currentUser.getDisplayName();
-                        if (name == null || name.isEmpty()) {
-                            name = "Trojan";
-                        }
-                        android.widget.TextView helloText = findViewById(R.id.helloText);
-                        if (helloText != null) {
-                            helloText.setText("Hello, " + name + "!");
-                        }
-                    })
-                    .addOnFailureListener(e -> {
-                        android.widget.TextView helloText = findViewById(R.id.helloText);
-                        if (helloText != null) {
-                            String name = currentUser.getDisplayName() != null ? currentUser.getDisplayName() : "Trojan";
-                            helloText.setText("Hello, " + name + "!");
-                        }
-                    });
-        }
+        if (currentUser == null) return;
+        FirebaseFirestore.getInstance().collection("users").document(currentUser.getUid())
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    User user = documentSnapshot.toObject(User.class);
+                    String name = user != null ? user.getDisplayName() : "Trojan";
+                    android.widget.TextView helloText = findViewById(R.id.helloText);
+                    if (helloText != null) {
+                        helloText.setText("Hello, " + name + "!");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    android.widget.TextView helloText = findViewById(R.id.helloText);
+                    if (helloText != null) {
+                        helloText.setText("Hello, Trojan!");
+                    }
+                });
     }
 }
