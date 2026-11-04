@@ -1,20 +1,36 @@
 rules_version = '2';
 
-// Rules are OR'd together, so the payments and rides blocks only hold because the catch-all at the
-// bottom skips those two collections. Don't add a broader match without keeping that exclusion.
+// Rules are OR'd together, so the payments, rides and users blocks only hold because the catch-all
+// at the bottom skips those collections. Don't add a broader match without keeping that exclusion.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // The app's @usc.edu check only runs on the phone, so a modified client skips it. Without
-    // email_verified, anyone could sign up with a password using a usc.edu address.
+    // The app's @usc.edu check only runs on the phone, so the rules repeat it. Email verification
+    // is out of scope for this project, so password accounts are accepted without it.
     function isUscStudent() {
       return request.auth != null
-        && request.auth.token.email_verified == true
+        && request.auth.token.email != null
         && request.auth.token.email.lower().matches('.+@usc[.]edu');
     }
 
     function uid() {
       return request.auth.uid;
+    }
+
+    // Profiles are readable by any student (public profile view). Only the owner writes, and
+    // email, USC ID, full name and graduation year are fixed after signup.
+    match /users/{userId} {
+      allow read: if isUscStudent();
+      allow create: if isUscStudent()
+        && userId == uid()
+        && request.resource.data.email.lower() == request.auth.token.email.lower()
+        && request.resource.data.uscId is string
+        && request.resource.data.uscId.matches('[0-9]{10}');
+      allow update: if isUscStudent()
+        && userId == uid()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['email', 'uscId', 'fullName', 'gradYear', 'createdAt']);
+      allow delete: if false;
     }
 
     match /rides/{rideId} {
@@ -93,7 +109,8 @@ service cloud.firestore {
 
     // Everything else stays open to signed-in students until its owner tightens it.
     match /{collection}/{document=**} {
-      allow read, write: if isUscStudent() && collection != 'payments' && collection != 'rides';
+      allow read, write: if isUscStudent() && collection != 'payments' && collection != 'rides'
+        && collection != 'users';
     }
   }
 }

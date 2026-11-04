@@ -71,6 +71,16 @@
     </LinearLayout>
 
     <TextView
+        android:id="@+id/profileSharingHintTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Your rides are private. Turn on Public to show a ride on your profile to other users."
+        android:textColor="@android:color/darker_gray"
+        android:textSize="13sp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/profileUpcomingHeader"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Upcoming Rides"
@@ -86,6 +96,17 @@
         android:layout_marginBottom="8dp" />
 
     <TextView
+        android:id="@+id/upcomingRidesEmptyTextView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="No upcoming rides"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginBottom="8dp" />
+
+
+    <TextView
+        android:id="@+id/profileCompletedHeader"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Completed Rides"
@@ -100,11 +121,21 @@
         android:layout_weight="1"
         android:layout_marginBottom="8dp" />
 
+    <TextView
+        android:id="@+id/completedRidesEmptyTextView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="No completed rides"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginBottom="8dp" />
+
+
     <Button
         android:id="@+id/profileSignOutButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Sign Out"
+        android:text="Log Out"
         android:layout_marginBottom="8dp" />
 
     <include layout="@layout/layout_bottom_nav" />

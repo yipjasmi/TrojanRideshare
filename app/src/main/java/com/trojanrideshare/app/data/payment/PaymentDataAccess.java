@@ -117,7 +117,12 @@ public class PaymentDataAccess implements PaymentRepository {
         Tasks.whenAllComplete(lookups).addOnSuccessListener(unused -> {
             Map<String, String> names = new HashMap<>();
             for (Task<DocumentSnapshot> lookup : lookups) {
-                Object name = lookup.isSuccessful() ? lookup.getResult().get("fullName") : null;
+                if (!lookup.isSuccessful()) continue;
+                // Show the user's chosen nickname, falling back to their full name.
+                Object name = lookup.getResult().get("nickname");
+                if (!(name instanceof String) || ((String) name).trim().isEmpty()) {
+                    name = lookup.getResult().get("fullName");
+                }
                 if (name instanceof String) {
                     names.put(lookup.getResult().getId(), (String) name);
                 }

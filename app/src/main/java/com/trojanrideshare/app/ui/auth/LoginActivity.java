@@ -2,120 +2,102 @@ package com.trojanrideshare.app.ui.auth;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.CancellationSignal;
-import android.util.Log;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
-import androidx.credentials.Credential;
-import androidx.credentials.CredentialManager;
-import androidx.credentials.CredentialManagerCallback;
-import androidx.credentials.CustomCredential;
-import androidx.credentials.GetCredentialRequest;
-import androidx.credentials.GetCredentialResponse;
-import androidx.credentials.exceptions.GetCredentialException;
 
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
-import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException;
+import com.google.firebase.auth.FirebaseAuthInvalidUserException;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
 
+/** Email/password login. New users go to {@link SignUpActivity}. */
 public class LoginActivity extends AppCompatActivity {
-    private static final String TAG = "LoginActivity";
     private FirebaseAuth auth;
+    private EditText emailEditText;
+    private EditText passwordEditText;
+    private Button loginButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
         auth = FirebaseAuth.getInstance();
-        findViewById(R.id.signInButton).setOnClickListener(v -> startGoogleSignIn());
+
+        emailEditText = findViewById(R.id.loginEmailEditText);
+        passwordEditText = findViewById(R.id.loginPasswordEditText);
+        loginButton = findViewById(R.id.loginButton);
+
+        loginButton.setOnClickListener(v -> attemptLogin());
+        findViewById(R.id.goToSignUpButton).setOnClickListener(
+                v -> startActivity(new Intent(this, SignUpActivity.class)));
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         if (auth.getCurrentUser() != null) {
-            checkUserAndNavigate();
+            checkProfileAndNavigate();
         }
     }
 
-    private void startGoogleSignIn() {
-        CredentialManager credentialManager = CredentialManager.create(this);
-        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(getString(R.string.default_web_client_id))
-                .build();
-        GetCredentialRequest request = new GetCredentialRequest.Builder()
-                .addCredentialOption(option)
-                .build();
+    private void attemptLogin() {
+        String email = emailEditText.getText().toString().trim().toLowerCase();
+        String password = passwordEditText.getText().toString();
 
-        credentialManager.getCredentialAsync(
-                this, request, new CancellationSignal(),
-                ContextCompat.getMainExecutor(this),
-                new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                    @Override
-                    public void onResult(GetCredentialResponse result) {
-                        Credential credential = result.getCredential();
-                        if (credential instanceof CustomCredential
-                                && credential.getType().equals(
-                                GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL)) {
-                            GoogleIdTokenCredential google = GoogleIdTokenCredential
-                                    .createFrom(((CustomCredential) credential).getData());
-                            firebaseSignIn(google.getIdToken());
-                        }
-                    }
-
-                    @Override
-                    public void onError(GetCredentialException e) {
-                        Log.e(TAG, "Google sign-in failed", e);
-                        Toast.makeText(LoginActivity.this,
-                                "Sign-in failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
-    }
-
-    private void firebaseSignIn(String idToken) {
-        AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
-        auth.signInWithCredential(credential).addOnCompleteListener(this, task -> {
-            if (!task.isSuccessful()) {
-                Toast.makeText(this, "Firebase sign-in failed", Toast.LENGTH_LONG).show();
-                return;
-            }
-            checkUserAndNavigate();
-        });
-    }
-
-    private void checkUserAndNavigate() {
-        FirebaseUser user = auth.getCurrentUser();
-        if (user == null) return;
-        String email = user.getEmail();
-        if (email == null || !email.toLowerCase().endsWith("@usc.edu")) {
-            auth.signOut();
-            Toast.makeText(this, "Please use your @usc.edu account", Toast.LENGTH_LONG).show();
+        if (!SignUpActivity.isUscEmail(email)) {
+            emailEditText.setError("Enter your @usc.edu email");
+            return;
+        }
+        if (password.isEmpty()) {
+            passwordEditText.setError("Enter your password");
             return;
         }
 
+        loginButton.setEnabled(false);
+        auth.signInWithEmailAndPassword(email, password)
+                .addOnSuccessListener(result -> checkProfileAndNavigate())
+                .addOnFailureListener(e -> {
+                    loginButton.setEnabled(true);
+                    String message;
+                    if (e instanceof FirebaseAuthInvalidUserException
+                            || e instanceof FirebaseAuthInvalidCredentialsException) {
+                        message = "Incorrect email or password";
+                    } else {
+                        message = "Login failed: " + e.getMessage();
+                    }
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                });
+    }
+
+    private void checkProfileAndNavigate() {
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null) return;
+
         FirebaseFirestore.getInstance().collection("users").document(user.getUid())
                 .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if (documentSnapshot.exists()) {
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
                         startActivity(new Intent(this, MainActivity.class));
                         finish();
                     } else {
-                        startActivity(new Intent(this, ProfileSetupActivity.class));
-                        finish();
+                        // Auth account without a profile (e.g. an old Google sign-in account).
+                        auth.signOut();
+                        loginButton.setEnabled(true);
+                        Toast.makeText(this,
+                                "No TrojanRideshare profile for this account. Please sign up.",
+                                Toast.LENGTH_LONG).show();
                     }
                 })
                 .addOnFailureListener(e -> {
-                    startActivity(new Intent(this, MainActivity.class));
-                    finish();
+                    loginButton.setEnabled(true);
+                    Toast.makeText(this, "Could not load your profile: " + e.getMessage(),
+                            Toast.LENGTH_LONG).show();
                 });
     }
 }

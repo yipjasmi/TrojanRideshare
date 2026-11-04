@@ -13,7 +13,7 @@
         android:theme="@style/Theme.TrojanRideshare">
         <activity android:name=".ui.history.HistoryActivity" android:exported="false" />
         <activity
-            android:name=".ui.auth.ProfileSetupActivity"
+            android:name=".ui.auth.SignUpActivity"
             android:exported="false" />
         <activity
             android:name=".ui.profile.ProfileActivity"
