@@ -19,6 +19,7 @@ import com.trojanrideshare.app.model.User;
 import java.util.Calendar;
 
 public class ProfileSetupActivity extends AppCompatActivity {
+    private EditText nicknameEditText;
     private EditText uscIdEditText;
     private EditText gradYearEditText;
     private Button saveProfileButton;
@@ -33,6 +34,7 @@ public class ProfileSetupActivity extends AppCompatActivity {
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 
+        nicknameEditText = findViewById(R.id.nicknameEditText);
         uscIdEditText = findViewById(R.id.uscIdEditText);
         gradYearEditText = findViewById(R.id.gradYearEditText);
         saveProfileButton = findViewById(R.id.saveProfileButton);
@@ -41,6 +43,7 @@ public class ProfileSetupActivity extends AppCompatActivity {
     }
 
     private void validateAndSave() {
+        String nickname = nicknameEditText.getText().toString().trim();
         String uscId = uscIdEditText.getText().toString().trim();
         String gradYearStr = gradYearEditText.getText().toString().trim();
 
@@ -58,8 +61,9 @@ public class ProfileSetupActivity extends AppCompatActivity {
         }
 
         int currentYear = Calendar.getInstance().get(Calendar.YEAR);
-        if (gradYear < currentYear) {
-            gradYearEditText.setError("Graduation year cannot be in the past");
+        int maxYear = currentYear + 6;
+        if (gradYear < currentYear || gradYear > maxYear) {
+            gradYearEditText.setError("Graduation year must be between " + currentYear + " and " + maxYear);
             return;
         }
 
@@ -72,42 +76,72 @@ public class ProfileSetupActivity extends AppCompatActivity {
 
         saveProfileButton.setEnabled(false);
 
-        // Check uniqueness of USC ID
+        // Check uniqueness of email and USC ID
         db.collection("users")
-                .whereEqualTo("uscId", uscId)
+                .whereEqualTo("email", firebaseUser.getEmail())
                 .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    if (!querySnapshot.isEmpty()) {
+                .addOnSuccessListener(emailSnap -> {
+                    boolean duplicateEmail = false;
+                    for (com.google.firebase.firestore.DocumentSnapshot doc : emailSnap.getDocuments()) {
+                        if (!doc.getId().equals(firebaseUser.getUid())) {
+                            duplicateEmail = true;
+                            break;
+                        }
+                    }
+                    if (duplicateEmail) {
                         saveProfileButton.setEnabled(true);
-                        uscIdEditText.setError("This USC ID is already registered");
-                        Toast.makeText(this, "USC ID already registered", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "This email address is already registered.", Toast.LENGTH_LONG).show();
                         return;
                     }
 
-                    // Save user
-                    User user = new User();
-                    user.id = firebaseUser.getUid();
-                    user.fullName = firebaseUser.getDisplayName() != null ? firebaseUser.getDisplayName() : "Trojan User";
-                    user.email = firebaseUser.getEmail();
-                    user.uscId = uscId;
-                    user.gradYear = gradYear;
-                    user.createdAt = Timestamp.now();
+                    db.collection("users")
+                            .whereEqualTo("uscId", uscId)
+                            .get()
+                            .addOnSuccessListener(querySnapshot -> {
+                                boolean duplicateUscId = false;
+                                for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                                    if (!doc.getId().equals(firebaseUser.getUid())) {
+                                        duplicateUscId = true;
+                                        break;
+                                    }
+                                }
+                                if (duplicateUscId) {
+                                    saveProfileButton.setEnabled(true);
+                                    uscIdEditText.setError("This USC ID is already registered");
+                                    Toast.makeText(this, "USC ID already registered", Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
 
-                    db.collection("users").document(firebaseUser.getUid())
-                            .set(user)
-                            .addOnSuccessListener(aVoid -> {
-                                Toast.makeText(this, "Profile saved successfully", Toast.LENGTH_SHORT).show();
-                                startActivity(new Intent(this, MainActivity.class));
-                                finish();
+                                // Save user
+                                User user = new User();
+                                user.id = firebaseUser.getUid();
+                                user.fullName = firebaseUser.getDisplayName() != null ? firebaseUser.getDisplayName() : "Trojan User";
+                                user.nickname = nickname.isEmpty() ? user.fullName : nickname;
+                                user.email = firebaseUser.getEmail();
+                                user.uscId = uscId;
+                                user.gradYear = gradYear;
+                                user.createdAt = Timestamp.now();
+
+                                db.collection("users").document(firebaseUser.getUid())
+                                        .set(user)
+                                        .addOnSuccessListener(aVoid -> {
+                                            Toast.makeText(this, "Profile saved successfully", Toast.LENGTH_SHORT).show();
+                                            startActivity(new Intent(this, MainActivity.class));
+                                            finish();
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            saveProfileButton.setEnabled(true);
+                                            Toast.makeText(this, "Failed to save profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                        });
                             })
                             .addOnFailureListener(e -> {
                                 saveProfileButton.setEnabled(true);
-                                Toast.makeText(this, "Failed to save profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                Toast.makeText(this, "Error checking USC ID: " + e.getMessage(), Toast.LENGTH_LONG).show();
                             });
                 })
                 .addOnFailureListener(e -> {
                     saveProfileButton.setEnabled(true);
-                    Toast.makeText(this, "Error checking USC ID: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Error checking email: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
     }
 }

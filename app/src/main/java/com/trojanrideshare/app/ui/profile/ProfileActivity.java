@@ -3,6 +3,7 @@ package com.trojanrideshare.app.ui.profile;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.CancellationSignal;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
@@ -31,16 +32,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ProfileActivity extends AppCompatActivity {
+    public static final String EXTRA_USER_ID = "userId";
+
+    private TextView titleTextView;
     private TextView nameTextView;
+    private TextView nicknameTextView;
     private TextView emailTextView;
     private TextView uscIdTextView;
     private TextView gradYearTextView;
+    private Button editNicknameButton;
     private ListView upcomingRidesListView;
     private ListView completedRidesListView;
     private Button signOutButton;
 
     private FirebaseAuth auth;
     private FirebaseFirestore db;
+    private String targetUserId;
+    private boolean isOwnProfile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,38 +58,52 @@ public class ProfileActivity extends AppCompatActivity {
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 
+        String extraUserId = getIntent().getStringExtra(EXTRA_USER_ID);
+        FirebaseUser currentUser = auth.getCurrentUser();
+        isOwnProfile = (extraUserId == null || (currentUser != null && currentUser.getUid().equals(extraUserId)));
+        targetUserId = isOwnProfile ? (currentUser != null ? currentUser.getUid() : null) : extraUserId;
+
+        titleTextView = findViewById(R.id.profileTitleTextView);
         nameTextView = findViewById(R.id.profileNameTextView);
+        nicknameTextView = findViewById(R.id.profileNicknameTextView);
         emailTextView = findViewById(R.id.profileEmailTextView);
         uscIdTextView = findViewById(R.id.profileUscIdTextView);
         gradYearTextView = findViewById(R.id.profileGradYearTextView);
+        editNicknameButton = findViewById(R.id.profileEditNicknameButton);
         upcomingRidesListView = findViewById(R.id.upcomingRidesListView);
         completedRidesListView = findViewById(R.id.completedRidesListView);
         signOutButton = findViewById(R.id.profileSignOutButton);
 
-        signOutButton.setOnClickListener(v -> signOut());
+        if (!isOwnProfile) {
+            titleTextView.setText("User Profile");
+            editNicknameButton.setVisibility(View.GONE);
+            signOutButton.setVisibility(View.GONE);
+        } else {
+            editNicknameButton.setOnClickListener(v -> showEditNicknameDialog());
+            signOutButton.setOnClickListener(v -> signOut());
+            BottomNavHelper.setupBottomNav(this, R.id.nav_profile);
+        }
 
         loadUserProfile();
         loadUserRides();
-
-        BottomNavHelper.setupBottomNav(this, R.id.nav_profile);
     }
 
     private void loadUserProfile() {
-        FirebaseUser currentUser = auth.getCurrentUser();
-        if (currentUser == null) return;
+        if (targetUserId == null) return;
 
-        db.collection("users").document(currentUser.getUid())
+        db.collection("users").document(targetUserId)
                 .get()
                 .addOnSuccessListener(documentSnapshot -> {
                     User user = documentSnapshot.toObject(User.class);
                     if (user != null) {
                         nameTextView.setText("Name: " + (user.fullName != null ? user.fullName : "N/A"));
+                        nicknameTextView.setText("Nickname: " + user.getDisplayName());
                         emailTextView.setText("Email: " + (user.email != null ? user.email : "N/A"));
                         uscIdTextView.setText("USC ID: " + (user.uscId != null ? user.uscId : "N/A"));
                         gradYearTextView.setText("Graduation Year: " + user.gradYear);
                     } else {
-                        nameTextView.setText("Name: " + currentUser.getDisplayName());
-                        emailTextView.setText("Email: " + currentUser.getEmail());
+                        nameTextView.setText("Name: N/A");
+                        nicknameTextView.setText("Nickname: N/A");
                     }
                 })
                 .addOnFailureListener(e -> {
@@ -89,13 +111,34 @@ public class ProfileActivity extends AppCompatActivity {
                 });
     }
 
+    private void showEditNicknameDialog() {
+        if (!isOwnProfile || targetUserId == null) return;
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("Enter new nickname");
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Edit Nickname")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String newNickname = input.getText().toString().trim();
+                    db.collection("users").document(targetUserId)
+                            .update("nickname", newNickname)
+                            .addOnSuccessListener(aVoid -> {
+                                Toast.makeText(this, "Nickname updated successfully", Toast.LENGTH_SHORT).show();
+                                loadUserProfile();
+                            })
+                            .addOnFailureListener(e -> {
+                                Toast.makeText(this, "Failed to update nickname: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            });
+                })
+                .show();
+    }
+
     private void loadUserRides() {
-        FirebaseUser currentUser = auth.getCurrentUser();
-        if (currentUser == null) return;
-        String userId = currentUser.getUid();
+        if (targetUserId == null) return;
 
         db.collection("rides")
-                .whereArrayContains("participantIds", userId)
+                .whereArrayContains("participantIds", targetUserId)
                 .get()
                 .addOnSuccessListener(snapshot -> {
                     List<Ride> rides = new ArrayList<>();
@@ -109,7 +152,9 @@ public class ProfileActivity extends AppCompatActivity {
                     Timestamp now = Timestamp.now();
                     // After a ride's departure passes, move it from upcoming to completed
                     // (cancelled rides are excluded from both lists).
-                    flipDepartedRides(rides, now);
+                    if (isOwnProfile) {
+                        flipDepartedRides(rides, now);
+                    }
                     RideScheduleService.Schedule schedule =
                             RideScheduleService.partition(rides, now);
 

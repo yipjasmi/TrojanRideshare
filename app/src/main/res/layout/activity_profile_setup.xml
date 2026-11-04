@@ -17,11 +17,19 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Please provide your USC ID and graduation year."
+        android:text="Please provide your nickname, USC ID, and graduation year."
         android:textSize="14sp"
         android:textColor="@android:color/darker_gray"
         android:gravity="center"
         android:layout_marginBottom="24dp" />
+
+    <EditText
+        android:id="@+id/nicknameEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Nickname (optional, defaults to full name)"
+        android:inputType="textPersonName"
+        android:layout_marginBottom="16dp" />
 
     <EditText
         android:id="@+id/uscIdEditText"

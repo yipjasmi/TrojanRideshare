@@ -24,6 +24,7 @@ import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
+import com.trojanrideshare.app.ui.profile.ProfileActivity;
 
 import java.text.DateFormat;
 import java.util.Date;
@@ -126,6 +127,13 @@ public class RideDetailActivity extends AppCompatActivity {
         setText(R.id.detailOrganizer, getString(
                 R.string.ride_detail_organizer_format,
                 getString(R.string.ride_detail_unknown_organizer)));
+        findViewById(R.id.detailOrganizer).setOnClickListener(v -> {
+            if (ride != null && ride.organizerId != null) {
+                Intent intent = new Intent(this, ProfileActivity.class);
+                intent.putExtra(ProfileActivity.EXTRA_USER_ID, ride.organizerId);
+                startActivity(intent);
+            }
+        });
         loadOrganizerName(ride.organizerId);
         setText(R.id.detailRoute, getString(
                 R.string.search_route_format, addressOf(ride.origin), addressOf(ride.destination)));
@@ -151,9 +159,9 @@ public class RideDetailActivity extends AppCompatActivity {
         userDataAccess.getById(organizerId, new UserDataAccess.SingleCallback() {
             @Override
             public void onSuccess(User user) {
-                if (user != null && user.fullName != null && !user.fullName.trim().isEmpty()) {
+                if (user != null) {
                     setText(R.id.detailOrganizer, getString(
-                            R.string.ride_detail_organizer_format, user.fullName));
+                            R.string.ride_detail_organizer_format, user.getDisplayName()));
                 }
             }
 
