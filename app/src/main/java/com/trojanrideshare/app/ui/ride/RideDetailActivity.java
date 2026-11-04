@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.TextInputEditText;
 
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
@@ -27,6 +28,7 @@ import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.service.ride.EditRideService;
+import com.trojanrideshare.app.service.ride.LeaveRideService;
 import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
 
@@ -50,11 +52,13 @@ public class RideDetailActivity extends AppCompatActivity {
     private Button joinButton;
     private Button editRideButton;
     private Button completeRideButton;
+    private Button leaveRideButton;
 
     private RideDataAccess rideDataAccess;
     private UserDataAccess userDataAccess;
     private JoinRequestService joinRequestService;
     private EditRideService editRideService;
+    private LeaveRideService leaveRideService;
     private String currentUserId;
     private Ride ride;
 
@@ -69,6 +73,7 @@ public class RideDetailActivity extends AppCompatActivity {
         userDataAccess = new UserDataAccess();
         joinRequestService = new JoinRequestService();
         editRideService = new EditRideService();
+        leaveRideService = new LeaveRideService();
         currentUserId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
         if (currentUserId == null || currentUserId.trim().isEmpty()) {
             // Fall back to the signed-in user when the caller didn't pass an id
@@ -84,10 +89,12 @@ public class RideDetailActivity extends AppCompatActivity {
         infoMessage = findViewById(R.id.detailInfoMessage);
         joinButton = findViewById(R.id.joinButton);
         editRideButton = findViewById(R.id.editRideButton);
-        joinButton.setOnClickListener(v -> requestToJoin());
+        joinButton.setOnClickListener(v -> showJoinDialog());
         completeRideButton = findViewById(R.id.completeRideButton);
         editRideButton.setOnClickListener(v -> openEditRide());
         completeRideButton.setOnClickListener(v -> confirmComplete());
+        leaveRideButton = findViewById(R.id.leaveRideButton);
+        leaveRideButton.setOnClickListener(v -> confirmLeave());
 
         editRideLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -188,41 +195,169 @@ public class RideDetailActivity extends AppCompatActivity {
         joinButton.setVisibility(View.GONE);
         editRideButton.setVisibility(View.GONE);
         completeRideButton.setVisibility(View.GONE);
+        leaveRideButton.setVisibility(View.GONE);
 
         boolean signedIn = currentUserId != null && !currentUserId.trim().isEmpty();
         if (!signedIn) {
             return;
         }
-        if (currentUserId.equals(ride.organizerId)) {
-            if (ride.isActive()) {
-                // Delays are allowed until the ride is completed; completing waits for departure.
-                editRideButton.setVisibility(View.VISIBLE);
-                if (ride.hasDeparted(Timestamp.now())) {
-                    completeRideButton.setVisibility(View.VISIBLE);
-                    showInfo(getString(R.string.ride_detail_badge_organizer)
-                            + " It has departed; complete it when the trip is done.");
-                    return;
-                }
-            }
-            showInfo(getString(R.string.ride_detail_badge_organizer));
+        Timestamp now = Timestamp.now();
+        boolean departed = ride.hasDeparted(now);
+        boolean isOrganizer = currentUserId.equals(ride.organizerId);
+        List<String> participants = ride.participantIds;
+        boolean isMember = isOrganizer || (participants != null && participants.contains(currentUserId));
+
+        if (isMember && Ride.STATUS_CANCELLED.equals(ride.status)) {
+            showInfo("This ride was cancelled.");
             return;
         }
-        List<String> participants = ride.participantIds;
-        if (participants != null && participants.contains(currentUserId)) {
+        if (isMember && Ride.STATUS_COMPLETED.equals(ride.status)) {
+            showInfo("This ride is completed.");
+            return;
+        }
+
+        if (isOrganizer) {
+            // Delays are allowed until the ride is completed; completing waits for departure.
+            editRideButton.setVisibility(View.VISIBLE);
+            if (departed) {
+                completeRideButton.setVisibility(View.VISIBLE);
+                showInfo(getString(R.string.ride_detail_badge_organizer)
+                        + " It has departed; complete it when the trip is done.");
+            } else {
+                leaveRideButton.setVisibility(View.VISIBLE);
+                showInfo(getString(R.string.ride_detail_badge_organizer));
+            }
+            return;
+        }
+        if (isMember) {
+            if (!departed) {
+                leaveRideButton.setVisibility(View.VISIBLE);
+            }
             showInfo(getString(R.string.ride_detail_badge_joined));
             return;
         }
-        boolean open = Ride.STATUS_ON_TIME.equals(ride.status)
-                || Ride.STATUS_DELAYED.equals(ride.status);
-        if (open && availableSeats > 0) {
-            joinButton.setVisibility(View.VISIBLE);
-            joinButton.setEnabled(true);
+        if (!ride.isActive()) {
+            showInfo("This ride is no longer accepting riders.");
+            return;
+        }
+        if (departed) {
+            showInfo(JoinRequestService.MESSAGE_DEPARTED);
+            return;
+        }
+        if (availableSeats <= 0) {
+            showInfo("This ride is full.");
+            return;
+        }
+        joinButton.setVisibility(View.VISIBLE);
+        joinButton.setEnabled(true);
+    }
+
+    private void showJoinDialog() {
+        if (ride == null) {
+            return;
+        }
+        View content = getLayoutInflater().inflate(R.layout.dialog_join_request, null, false);
+        TextInputEditText messageInput = content.findViewById(R.id.joinRequestMessageInput);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.join_request_dialog_title)
+                .setMessage(getString(R.string.join_request_dialog_message,
+                        emptyFallback(ride.title, getString(R.string.search_untitled_ride))))
+                .setView(content)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.join_request_send, (dialog, which) ->
+                        requestToJoin(messageInput.getText() == null
+                                ? "" : messageInput.getText().toString()))
+                .show();
+    }
+
+    private void confirmLeave() {
+        if (ride == null) {
+            return;
+        }
+        String error = LeaveRideService.leaveError(ride, currentUserId, Timestamp.now());
+        if (error != null) {
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("Can't leave this ride")
+                    .setMessage(error)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+            return;
+        }
+        LeaveRideService.Plan plan = LeaveRideService.plan(ride, currentUserId);
+        if (plan.outcome == LeaveRideService.Outcome.OWNERSHIP_TRANSFERRED) {
+            userDataAccess.getById(plan.newOrganizerId, new UserDataAccess.SingleCallback() {
+                @Override
+                public void onSuccess(User user) {
+                    showLeaveDialog(plan, user == null ? "the earliest-joined rider" : user.getDisplayName());
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    showLeaveDialog(plan, "the earliest-joined rider");
+                }
+            });
+        } else {
+            showLeaveDialog(plan, null);
         }
     }
 
-    private void requestToJoin() {
+    private void showLeaveDialog(LeaveRideService.Plan plan, String newOrganizerName) {
+        String message;
+        switch (plan.outcome) {
+            case RIDE_CANCELLED:
+                message = "You're the only rider, so leaving cancels this ride. "
+                        + "Any pending requests will be closed. This can't be undone.";
+                break;
+            case OWNERSHIP_TRANSFERRED:
+                message = "You'll leave and " + newOrganizerName
+                        + " (the earliest-joined rider) becomes the organizer.";
+                break;
+            case RIDER_LEFT:
+            default:
+                message = "You'll be removed from this ride and your seat opens up.";
+                break;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Leave this ride?")
+                .setMessage(message)
+                .setNegativeButton("Stay", null)
+                .setPositiveButton("Leave", (dialog, which) -> leaveRide())
+                .show();
+    }
+
+    private void leaveRide() {
+        leaveRideButton.setEnabled(false);
+        leaveRideService.leave(ride, currentUserId, new LeaveRideService.Callback() {
+            @Override
+            public void onSuccess(LeaveRideService.Plan plan) {
+                leaveRideButton.setEnabled(true);
+                String done = plan.outcome == LeaveRideService.Outcome.RIDE_CANCELLED
+                        ? "You left, and the ride was cancelled."
+                        : plan.outcome == LeaveRideService.Outcome.OWNERSHIP_TRANSFERRED
+                        ? "You left. The ride has a new organizer."
+                        : "You left the ride.";
+                Toast.makeText(RideDetailActivity.this, done, Toast.LENGTH_LONG).show();
+                loadRide(ride.id);
+            }
+
+            @Override
+            public void onDenied(String reason) {
+                leaveRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, reason, Toast.LENGTH_LONG).show();
+                loadRide(ride.id);
+            }
+
+            @Override
+            public void onError(String message) {
+                leaveRideButton.setEnabled(true);
+                Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void requestToJoin(String message) {
         joinButton.setEnabled(false);
-        joinRequestService.submit(ride, currentUserId, null, new JoinRequestService.Callback() {
+        joinRequestService.submit(ride, currentUserId, message, new JoinRequestService.Callback() {
             @Override
             public void onSuccess(JoinRequest request) {
                 joinButton.setVisibility(View.GONE);

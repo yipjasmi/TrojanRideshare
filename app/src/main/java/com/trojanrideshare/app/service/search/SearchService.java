@@ -1,5 +1,6 @@
 package com.trojanrideshare.app.service.search;
 
+import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.data.ride.RideDataAccess;
 import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
@@ -42,7 +43,7 @@ public class SearchService {
         rideDataAccess.getActiveRides(new RideDataAccess.Callback() {
             @Override
             public void onSuccess(List<Ride> rides) {
-                callback.onSuccess(filterRides(rides, criteria, currentUserId));
+                callback.onSuccess(filterRides(rides, criteria, currentUserId, Timestamp.now()));
             }
 
             @Override
@@ -52,10 +53,37 @@ public class SearchService {
         });
     }
 
+    /** Rides within this distance of each other count as tied for the combined sort. */
+    public static final double PROXIMITY_TIE_MILES = 0.5;
+
+    public static final String ERROR_KEYWORDS_REQUIRED =
+            "Enter both an origin keyword and a destination keyword.";
+
+    /** Both keyword inputs are required; returns an error message or {@code null}. */
+    public static String keywordError(String originKeyword, String destinationKeyword) {
+        boolean missingOrigin = originKeyword == null || originKeyword.trim().isEmpty();
+        boolean missingDestination = destinationKeyword == null || destinationKeyword.trim().isEmpty();
+        return missingOrigin || missingDestination ? ERROR_KEYWORDS_REQUIRED : null;
+    }
+
     static List<Ride> filterRides(
             List<Ride> rides,
             SearchCriteria criteria,
             String currentUserId
+    ) {
+        return filterRides(rides, criteria, currentUserId, null);
+    }
+
+    /**
+     * Results are active (On Time or Delayed) rides with at least one open seat that haven't
+     * departed yet ({@code now} null skips the departure check). A Delayed ride uses its updated
+     * departure time for filtering and sorting.
+     */
+    static List<Ride> filterRides(
+            List<Ride> rides,
+            SearchCriteria criteria,
+            String currentUserId,
+            Timestamp now
     ) {
         if (rides == null || currentUserId == null) {
             return Collections.emptyList();
@@ -68,6 +96,9 @@ public class SearchService {
 
         for (Ride ride : rides) {
             if (!isValidResult(ride, currentUserId)) {
+                continue;
+            }
+            if (now != null && ride.hasDeparted(now)) {
                 continue;
             }
             if (!containsIgnoreCase(addressOf(ride.origin), safeCriteria.originKeyword)) {
@@ -163,28 +194,21 @@ public class SearchService {
         } else if (option == SortOption.ROUTE_PROXIMITY) {
             rides.sort(proximityComparator.thenComparing(departureComparator));
         } else if (option == SortOption.PROXIMITY_AND_TIME) {
-            long earliestDeparture = rides.stream()
-                    .mapToLong(SearchService::departureMillis)
-                    .min()
-                    .orElse(0);
-            rides.sort(Comparator.comparingDouble(
-                    ride -> combinedSortScore(ride, criteria, earliestDeparture)
-            ));
+            // Proximity first; rides within the same half-mile band tie and are ordered by
+            // earliest (updated) departure.
+            rides.sort(Comparator.<Ride>comparingLong(ride -> proximityBand(ride, criteria))
+                    .thenComparing(departureComparator));
         } else {
             rides.sort(departureComparator);
         }
     }
 
-    private static double combinedSortScore(
-            Ride ride,
-            SearchCriteria criteria,
-            long earliestDeparture
-    ) {
-        double hoursAfterEarliest = Math.max(
-                0,
-                (departureMillis(ride) - earliestDeparture) / 3_600_000.0
-        );
-        return routeDistanceMiles(ride, criteria) + hoursAfterEarliest;
+    private static long proximityBand(Ride ride, SearchCriteria criteria) {
+        double distance = routeDistanceMiles(ride, criteria);
+        if (distance == Double.MAX_VALUE) {
+            return Long.MAX_VALUE;
+        }
+        return (long) Math.floor(distance / PROXIMITY_TIE_MILES);
     }
 
     private static double routeDistanceMiles(Ride ride, SearchCriteria criteria) {

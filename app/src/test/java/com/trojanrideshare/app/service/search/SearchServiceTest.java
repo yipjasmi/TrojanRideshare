@@ -219,6 +219,55 @@ public class SearchServiceTest {
         assertEquals(Arrays.asList(near, farther), results);
     }
 
+    @Test
+    public void filterRides_excludesDepartedRidesWhenNowGiven() {
+        Ride departed = timedRide("departed", 2026, Calendar.NOVEMBER, 2, 8, 0, 4, 1);
+        Ride upcoming = timedRide("upcoming", 2026, Calendar.NOVEMBER, 2, 18, 0, 4, 1);
+        Timestamp now = new Timestamp(new Date(millis(2026, Calendar.NOVEMBER, 2, 12, 0)));
+
+        List<Ride> results = SearchService.filterRides(
+                Arrays.asList(departed, upcoming),
+                criteria(null, null, 0, null, null, null, null, 0,
+                        SortOption.DEPARTURE_EARLIEST),
+                CURRENT_USER,
+                now
+        );
+
+        assertEquals(Collections.singletonList(upcoming), results);
+    }
+
+    @Test
+    public void filterRides_combinedSortUsesTimeToBreakProximityTies() {
+        PlaceInfo preferredOrigin = place("USC", 34.0224, -118.2851);
+        PlaceInfo preferredDestination = place("LAX", 33.9416, -118.4085);
+        // Both within the same half-mile band of the picked points; the later one is closer.
+        Ride laterCloser = timedRide("later", 2026, Calendar.NOVEMBER, 2, 12, 0, 4, 1);
+        laterCloser.origin = place("USC", 34.0224, -118.2851);
+        laterCloser.destination = place("LAX", 33.9416, -118.4085);
+        Ride earlierSlightlyFarther = timedRide("earlier", 2026, Calendar.NOVEMBER, 2, 9, 0, 4, 1);
+        earlierSlightlyFarther.origin = place("Near USC", 34.0230, -118.2860);
+        earlierSlightlyFarther.destination = place("Near LAX", 33.9420, -118.4090);
+        Ride far = timedRide("far", 2026, Calendar.NOVEMBER, 2, 7, 0, 4, 1);
+        far.origin = place("Downtown", 34.0522, -118.2437);
+        far.destination = place("El Segundo", 33.9192, -118.4165);
+
+        List<Ride> results = SearchService.filterRides(
+                Arrays.asList(far, laterCloser, earlierSlightlyFarther),
+                criteria(preferredOrigin, preferredDestination, 0, null, null, null, null, 0,
+                        SortOption.PROXIMITY_AND_TIME),
+                CURRENT_USER
+        );
+
+        assertEquals(Arrays.asList(earlierSlightlyFarther, laterCloser, far), results);
+    }
+
+    @Test
+    public void keywordError_requiresBothKeywords() {
+        assertEquals(SearchService.ERROR_KEYWORDS_REQUIRED, SearchService.keywordError("USC", " "));
+        assertEquals(SearchService.ERROR_KEYWORDS_REQUIRED, SearchService.keywordError("", "LAX"));
+        org.junit.Assert.assertNull(SearchService.keywordError("USC", "LAX"));
+    }
+
     private static Ride ride(
             String id,
             String origin,

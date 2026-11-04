@@ -62,15 +62,47 @@ service cloud.firestore {
         && request.resource.data.maxRiders >= 2
         && request.resource.data.maxRiders <= 6;
 
+      // Leaving needs at least three hours before the current (possibly delayed) departure.
+      function isBeforeLeaveCutoff() {
+        return resource.data.departureTime > request.time + duration.value(3, 'h');
+      }
+
+      // The caller removes only themselves from the rider list.
+      function isSelfRemoval() {
+        return uid() in resource.data.participantIds
+          && request.resource.data.participantIds
+               == resource.data.participantIds.removeAll([uid()]);
+      }
+
+      // Organizer leaving with riders left: ownership goes to a remaining rider.
+      function isOwnershipTransfer() {
+        return isSelfRemoval()
+          && isBeforeLeaveCutoff()
+          && request.resource.data.organizerId in resource.data.participantIds
+          && request.resource.data.organizerId != uid();
+      }
+
+      function addsRiders() {
+        return request.resource.data.participantIds.size() > resource.data.participantIds.size();
+      }
+
       // Posted title, locations, expected cost and max riders never change. Only the organizer
-      // changes status, departure time, cost records or ownership; others may only change
-      // membership. Once completed/cancelled, only the recorded final cost may still be written.
+      // changes status, departure time, cost records or ownership; another rider may only remove
+      // themselves (leave) before the cutoff. Riders are only added before departure. Cancelling
+      // happens through a solo organizer leaving, so it follows the leave cutoff. Once
+      // completed/cancelled, only the recorded final cost may still be written.
       allow update: if isUscStudent()
         && !changedKeys().hasAny(['title', 'origin', 'destination', 'maxRiders',
                                   'expectedCost', 'createdAt'])
-        && (resource.data.organizerId == uid() || changedKeys().hasOnly(['participantIds']))
+        && (resource.data.organizerId == uid()
+            || (changedKeys().hasOnly(['participantIds']) && isSelfRemoval() && isBeforeLeaveCutoff()))
         && (isActive(resource.data.status) || changedKeys().hasOnly(['finalCost']))
-        && (!changedKeys().hasAny(['status']) || isValidStatusChange());
+        && (!changedKeys().hasAny(['status']) || isValidStatusChange())
+        && (!changedKeys().hasAny(['organizerId']) || isOwnershipTransfer())
+        && (request.resource.data.status != 'cancelled' || resource.data.status == 'cancelled'
+            || isBeforeLeaveCutoff())
+        && (!changedKeys().hasAny(['participantIds']) || !addsRiders()
+            || request.time < resource.data.departureTime);
 
       allow delete: if false;
     }
