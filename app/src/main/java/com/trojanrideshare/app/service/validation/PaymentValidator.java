@@ -26,7 +26,7 @@ public final class PaymentValidator {
     public static Result finalCost(String input) {
         Result result = parse(input, "Enter the final cost.");
         if (result.isValid() && result.cents == 0) {
-            return invalid("Final cost must be greater than $0.");
+            return invalid("Final cost can't be $0.00. Enter the actual amount, greater than zero.");
         }
         return result;
     }

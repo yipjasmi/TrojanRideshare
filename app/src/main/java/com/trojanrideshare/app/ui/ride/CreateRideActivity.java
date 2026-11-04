@@ -150,13 +150,18 @@ public class CreateRideActivity extends AppCompatActivity {
     }
 
     private void submit() {
+        String costText = costInput.getText().toString().trim().replace("$", "").replace(",", "");
+        if (!costText.isEmpty() && parseDouble(costText) == null) {
+            setError(R.id.costError, RideValidator.ERROR_COST_INVALID);
+            return;
+        }
         RideInput input = new RideInput(
                 titleInput.getText().toString(),
                 origin,
                 destination,
                 departure == null ? null : new Timestamp(departure.getTime()),
                 parseInteger(maxRidersInput.getText().toString()),
-                parseDouble(costInput.getText().toString())
+                parseDouble(costText)
         );
 
         setLoading(true);

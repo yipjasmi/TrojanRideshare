@@ -40,8 +40,8 @@ public class PaymentValidatorTest {
 
     @Test
     public void finalCost_mustBeGreaterThanZero() {
-        assertCostRejected("0", "Final cost must be greater than $0.");
-        assertCostRejected("0.00", "Final cost must be greater than $0.");
+        assertCostRejected("0", "Final cost can't be $0.00. Enter the actual amount, greater than zero.");
+        assertCostRejected("0.00", "Final cost can't be $0.00. Enter the actual amount, greater than zero.");
     }
 
     @Test
