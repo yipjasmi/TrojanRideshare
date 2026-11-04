@@ -41,6 +41,7 @@ import com.trojanrideshare.app.model.SearchCriteria;
 import com.trojanrideshare.app.model.SortOption;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.service.search.SearchService;
+import com.trojanrideshare.app.ui.ride.CreateRideActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
 
@@ -115,6 +116,21 @@ public class SearchActivity extends AppCompatActivity {
         joinRequestService = new JoinRequestService();
         initializePlaces();
         updateTimeButtons();
+
+        View createFab = findViewById(R.id.createRideFab);
+        if (createFab != null) {
+            createFab.setOnClickListener(v -> {
+                Intent createIntent = new Intent(SearchActivity.this, CreateRideActivity.class);
+                String currentUserId = getCurrentUserId();
+                if (currentUserId != null) {
+                    createIntent.putExtra(
+                            CreateRideActivity.EXTRA_CURRENT_USER_ID,
+                            currentUserId
+                    );
+                }
+                startActivity(createIntent);
+            });
+        }
 
         findViewById(R.id.selectOriginButton).setOnClickListener(
                 view -> launchPlacePicker(originPicker)
