@@ -53,6 +53,16 @@ public class HistoryServiceTest {
         assertEquals(1,s.ownedRides); assertEquals(1,s.joinedRides);
         assertFalse(HistoryService.summarize(Arrays.asList(paid,unpaid),payments,UID,2026,11).hasActivity());
     }
+    @Test public void ridesInMonthMatchesSummaryNewestFirst() {
+        Ride early = ride("e",2026,10,3,UID,"completed");
+        Ride late = ride("l",2026,10,28,"other","completed");
+        Ride cancelled = ride("c",2026,10,15,UID,"cancelled");
+        Ride otherMonth = ride("n",2026,11,1,UID,"completed");
+        List<Ride> all = Arrays.asList(early, late, late, cancelled, otherMonth);
+        assertEquals(Arrays.asList(late, early), HistoryService.ridesInMonth(all, UID, 2026, 10));
+        assertEquals(HistoryService.summarize(all, Collections.emptyMap(), UID, 2026, 10).completedRides,
+            HistoryService.ridesInMonth(all, UID, 2026, 10).size());
+    }
     @Test public void organizerIncludedWithoutParticipantEntry() {
         Ride r = ride("a",2026,10,1,UID,"completed"); r.participantIds.clear();
         assertEquals(1,HistoryService.filter(Arrays.asList(r),UID,new HistoryFilter(),0).size());

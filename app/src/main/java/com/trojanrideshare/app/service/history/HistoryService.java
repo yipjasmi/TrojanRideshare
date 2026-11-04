@@ -55,6 +55,22 @@ public class HistoryService {
         return 3958.7613 * 2 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, h))));
     }
 
+    /** The completed rides counted in a month's summary, newest first (same rules as summarize). */
+    public static List<Ride> ridesInMonth(List<Ride> rides, String uid, int year, int month) {
+        List<Ride> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (Ride r : rides) {
+            if (uid == null || !r.getAllParticipantIds().contains(uid) || r.departureTime == null
+                    || !Ride.STATUS_COMPLETED.equals(r.status)) continue;
+            if (r.id != null && !seen.add(r.id)) continue;
+            Calendar date = Calendar.getInstance(); date.setTime(r.departureTime.toDate());
+            if (date.get(Calendar.YEAR) != year || date.get(Calendar.MONTH) + 1 != month) continue;
+            result.add(r);
+        }
+        result.sort((a, b) -> b.departureTime.compareTo(a.departureTime));
+        return result;
+    }
+
     /**
      * Month is 1..12. The month comes from the ride's scheduled departure date (the updated time
      * for a delayed ride), not from when it was marked completed. Cancelled rides are excluded.
