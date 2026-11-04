@@ -60,12 +60,15 @@
                         android:inputType="textCapWords"
                         android:maxLines="1" />
 
-                    <Button
-                        android:id="@+id/selectOriginButton"
-                        style="?attr/materialButtonOutlinedStyle"
+                    <TextView
+                        android:id="@+id/originResolvedText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/search_select_origin" />
+                        android:background="?attr/selectableItemBackground"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:visibility="gone" />
 
                     <EditText
                         android:id="@+id/destinationSearchInput"
@@ -78,12 +81,15 @@
                         android:inputType="textCapWords"
                         android:maxLines="1" />
 
-                    <Button
-                        android:id="@+id/selectDestinationButton"
-                        style="?attr/materialButtonOutlinedStyle"
+                    <TextView
+                        android:id="@+id/destinationResolvedText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/search_select_destination" />
+                        android:background="?attr/selectableItemBackground"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:visibility="gone" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

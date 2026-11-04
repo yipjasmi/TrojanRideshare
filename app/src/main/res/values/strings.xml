@@ -1,13 +1,11 @@
 <resources>
     <string name="app_name">TrojanRideshare</string>
     <string name="search_title">Find a ride</string>
-    <string name="search_subtitle">All upcoming On Time and Delayed rides are listed below. Use any filters to narrow them. If you search by keyword, fill in both origin and destination.</string>
+    <string name="search_subtitle">All upcoming On Time and Delayed rides are listed below. Enter an origin and a destination to narrow them by name, or turn on the radius to find rides near those places.</string>
     <string name="search_route_section">Route</string>
     <string name="search_filters_section">Filters and sorting</string>
-    <string name="search_origin_hint">Origin keyword, e.g. USC or Hoover</string>
-    <string name="search_destination_hint">Destination keyword, e.g. UCLA or LAX</string>
-    <string name="search_select_origin">Pick origin point for distance (optional)</string>
-    <string name="search_select_destination">Pick destination point for distance (optional)</string>
+    <string name="search_origin_hint">Origin, e.g. USC or Hoover St</string>
+    <string name="search_destination_hint">Destination, e.g. UCLA or LAX</string>
     <string name="search_date_label">Departure date range (optional)</string>
     <string name="search_any_start_date">Any start date</string>
     <string name="search_any_end_date">Any end date</string>
@@ -15,13 +13,13 @@
     <string name="search_start_time">Start: %1$s</string>
     <string name="search_end_time">End: %1$s</string>
     <string name="search_seats_label">Minimum available seats</string>
-    <string name="search_distance_filter">Within this radius of each picked point</string>
+    <string name="search_distance_filter">Search by distance: rides starting and ending within this radius of the places above</string>
     <string name="search_distance_hint">Maximum distance (miles)</string>
     <string name="search_sort_label">Sort results by</string>
     <string name="search_clear_filters">Clear filters</string>
     <string name="search_invalid_distance">Enter a maximum distance greater than zero.</string>
     <string name="search_invalid_date_range">The end date must be on or after the start date.</string>
-    <string name="search_locations_required">Pick an origin or destination point (or both) to use the radius filter or proximity sorting.</string>
+    <string name="search_locations_required">Enter an origin and a destination to search by distance or sort by closeness.</string>
     <string name="search_places_unavailable">Google Places is unavailable. Check the API key in local.properties.</string>
     <string name="search_location_error">Could not select that location. Please try again.</string>
     <string name="search_action">Search rides</string>
