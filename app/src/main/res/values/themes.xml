@@ -1,8 +1,36 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+    <!-- Base application theme. Every color comes from values/colors.xml (light) or
+         values-night/colors.xml (dark), so there is no night copy of this style; adding one
+         back would drop these items in dark mode. -->
     <style name="Base.Theme.TrojanRideshare" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/theme_primary</item>
+        <item name="colorOnPrimary">@color/theme_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/theme_primary_container</item>
+        <item name="colorSecondary">@color/theme_secondary</item>
+        <item name="colorOnSecondary">@color/theme_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_on_secondary_container</item>
+        <!-- No third accent: tertiary reuses gold so the stock purple never shows. -->
+        <item name="colorTertiary">@color/theme_secondary</item>
+        <item name="colorOnTertiary">@color/theme_on_secondary</item>
+        <item name="colorTertiaryContainer">@color/theme_secondary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_on_secondary_container</item>
+        <item name="android:colorBackground">@color/theme_surface</item>
+        <item name="colorOnBackground">@color/theme_on_surface</item>
+        <item name="colorSurface">@color/theme_surface</item>
+        <item name="colorOnSurface">@color/theme_on_surface</item>
+        <item name="colorSurfaceVariant">@color/theme_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/theme_on_surface_variant</item>
+        <item name="colorSurfaceContainerLow">@color/theme_surface_container_low</item>
+        <item name="colorSurfaceContainer">@color/theme_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/theme_surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/theme_surface_container_highest</item>
+        <item name="colorSurfaceInverse">@color/theme_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_surface_container</item>
+        <item name="colorOutline">@color/theme_outline</item>
+        <item name="colorOutlineVariant">@color/theme_outline_variant</item>
     </style>
 
     <style name="Theme.TrojanRideshare" parent="Base.Theme.TrojanRideshare" />
@@ -15,5 +43,17 @@
         <item name="android:textColor">@color/field_error</item>
         <item name="android:textAppearance">?attr/textAppearanceBodySmall</item>
         <item name="android:visibility">gone</item>
+    </style>
+
+    <!-- Ride status pill. RideStatusChip sets the label and both colors. -->
+    <style name="StatusChip">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/bg_badge</item>
+        <item name="android:paddingStart">10dp</item>
+        <item name="android:paddingTop">3dp</item>
+        <item name="android:paddingEnd">10dp</item>
+        <item name="android:paddingBottom">3dp</item>
+        <item name="android:textAppearance">?attr/textAppearanceLabelMedium</item>
     </style>
 </resources>
