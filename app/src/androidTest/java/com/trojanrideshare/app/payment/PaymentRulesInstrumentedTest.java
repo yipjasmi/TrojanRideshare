@@ -229,13 +229,16 @@ public class PaymentRulesInstrumentedTest {
         }
     }
 
+    // Email verification is out of scope since the team switched to password signup, so an
+    // unverified @usc.edu account counts as a student. It still only sees its own shares.
     @Test
-    public void rules_refuseAUscEmailNobodyVerified() throws Exception {
+    public void rules_letAPasswordAccountWithAUscEmailIn() throws Exception {
         String rideId = splitRide();
 
         PaymentEmulator.signUpWithPassword(UUID.randomUUID() + "@usc.edu");
 
-        assertLockedOut(rideId);
+        assertTrue(await(firestore().collection("rides").document(rideId).get()).exists());
+        assertDenied(share(rideId, emulator.riderA).get());
     }
 
     private void assertLockedOut(String rideId) throws Exception {
@@ -397,8 +400,8 @@ public class PaymentRulesInstrumentedTest {
     @Test
     public void saveSplit_worksForAnUntitledRide() throws Exception {
         String rideId = emulator.seedCompletedRide();
+        emulator.clearTitle(rideId);
         emulator.signIn(emulator.organizer);
-        await(firestore().collection("rides").document(rideId).update("title", null));
 
         saveSplit(rideId, new long[] {334, 333, 333}, 1000);
 
@@ -468,6 +471,9 @@ public class PaymentRulesInstrumentedTest {
     @Test
     public void joinRequest_letsARiderBeBilledAndPay() throws Exception {
         String rideId = emulator.seedRide(Ride.STATUS_ON_TIME, new ArrayList<>());
+        // Requests and acceptances stop at departure, and completing waits for it, so the ride
+        // leaves in an hour until the rider is in, then departs.
+        emulator.moveDeparture(rideId, 60 * 60 * 1000L);
         JoinRequestDataAccess joinRequests = new JoinRequestDataAccess();
 
         emulator.signIn(emulator.riderA);
@@ -475,6 +481,7 @@ public class PaymentRulesInstrumentedTest {
 
         emulator.signIn(emulator.organizer);
         acceptJoinRequest(joinRequests, rideId, emulator.riderA);
+        emulator.moveDeparture(rideId, -60 * 1000L);
         await(firestore()
                 .collection("rides")
                 .document(rideId)

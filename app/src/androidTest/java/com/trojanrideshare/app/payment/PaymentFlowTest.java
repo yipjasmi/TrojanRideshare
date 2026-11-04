@@ -291,7 +291,8 @@ public class PaymentFlowTest {
         try (ActivityScenario<RecordCostActivity> screen = openRecordCost(rideId)) {
             enterCost("0");
             onView(withId(R.id.reviewButton)).perform(click());
-            onView(withText("Final cost must be greater than $0.")).check(matches(isDisplayed()));
+            onView(withText("Final cost can't be $0.00. Enter the actual amount, greater than zero."))
+                    .check(matches(isDisplayed()));
 
             enterCost("12.345");
             onView(withId(R.id.reviewButton)).perform(click());
