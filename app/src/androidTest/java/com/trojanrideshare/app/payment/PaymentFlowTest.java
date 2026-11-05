@@ -14,6 +14,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.hasDescendant;
 import static androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withChild;
+import static androidx.test.espresso.matcher.ViewMatchers.withContentDescription;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withParent;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
@@ -349,6 +350,47 @@ public class PaymentFlowTest {
         }
 
         assertTrue(share(rideId, emulator.riderA).getBoolean("paid"));
+    }
+
+    @Test
+    public void ridePayment_offersPaymentAppsOnlyForValidHandles() throws Exception {
+        String rideId = splitRide();
+        await(PaymentEmulator.saveHandles(emulator.organizer, "ashley-lan", "ashley"));
+        emulator.signIn(emulator.riderA);
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            waitFor(allOf(withId(R.id.payVenmoButton), withText("Pay Ashley Lan $3.33 on Venmo")));
+            onView(withId(R.id.payCashAppButton))
+                    .check(matches(withText("Pay Ashley Lan $3.33 on Cash App")));
+        }
+
+        // The rules don't check these fields, so a profile can hold anything.
+        emulator.signIn(emulator.organizer);
+        await(firestore().collection("users").document(emulator.organizer)
+                .update("venmoUsername", "evil.com/pay", "cashtag", "12345"));
+        emulator.signIn(emulator.riderA);
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            waitFor(withText("Your share"));
+            onView(withId(R.id.payVenmoButton)).check(matches(not(isDisplayed())));
+            onView(withId(R.id.payCashAppButton)).check(matches(not(isDisplayed())));
+            onView(withId(R.id.primaryAction)).check(matches(withText("Mark as paid")));
+        }
+    }
+
+    @Test
+    public void ridePayment_letsTheOrganizerRequestFromRidersWithVenmo() throws Exception {
+        String rideId = splitRide();
+        emulator.signIn(emulator.riderA);
+        await(PaymentEmulator.saveHandles(emulator.riderA, "kyle-t", null));
+        emulator.signIn(emulator.organizer);
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            waitFor(shareRow("Yucheng Zhao", "Unpaid"));
+            onView(allOf(withId(R.id.shareRequest), isDisplayed())).check(matches(
+                    withContentDescription("Request $3.33 from Kyle Macasilli-Tan on Venmo")
+            ));
+        }
     }
 
     @Test

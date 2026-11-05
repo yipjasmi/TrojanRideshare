@@ -17,6 +17,9 @@ public class User {
     public Timestamp createdAt;
     /** Rides this user chose to show on their public profile. Everything else stays private. */
     public List<String> sharedRideIds = new ArrayList<>();
+    /** Stored without the leading @ or $. The rules don't check these, PaymentValidator does. */
+    public String venmoUsername;
+    public String cashtag;
 
     public User() {}
 

@@ -250,6 +250,30 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
+    public void saveHandles_letsTheOwnerSaveAndClearTheirPaymentApps() throws Exception {
+        emulator.signIn(emulator.riderA);
+        DocumentReference profile = firestore().collection("users").document(emulator.riderA);
+
+        await(PaymentEmulator.saveHandles(emulator.riderA, "kyle-t", "kyle"));
+        DocumentSnapshot saved = await(profile.get());
+        assertEquals("kyle-t", saved.getString("venmoUsername"));
+        assertEquals("kyle", saved.getString("cashtag"));
+
+        await(PaymentEmulator.saveHandles(emulator.riderA, null, null));
+        DocumentSnapshot cleared = await(profile.get());
+        assertFalse(cleared.contains("venmoUsername"));
+        assertFalse(cleared.contains("cashtag"));
+        assertEquals("Kyle Macasilli-Tan", cleared.getString("fullName"));
+    }
+
+    @Test
+    public void rules_refuseSettingSomeoneElsesPaymentApps() throws Exception {
+        emulator.signIn(emulator.stranger);
+
+        assertDenied(PaymentEmulator.saveHandles(emulator.organizer, "stranger-venmo", null));
+    }
+
+    @Test
     public void markPaid_onlyWorksForTheRidersOwnShare() throws Exception {
         String rideId = splitRide();
 

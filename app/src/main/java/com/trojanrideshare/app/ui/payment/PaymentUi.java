@@ -1,6 +1,9 @@
 package com.trojanrideshare.app.ui.payment;
 
 import android.content.Context;
+import android.provider.Settings;
+import android.view.View;
+import android.view.animation.OvershootInterpolator;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
@@ -18,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 final class PaymentUi {
+    private static final long PAID_CHECK_MILLIS = 350;
+
     private PaymentUi() {}
 
     static void setUpScreen(AppCompatActivity activity) {
@@ -85,6 +90,31 @@ final class PaymentUi {
         return position == 0
                 ? context.getString(R.string.payment_organizer_fallback)
                 : context.getString(R.string.payment_rider_fallback, position);
+    }
+
+    static void showPaidCheck(View check, boolean animate) {
+        check.setVisibility(View.VISIBLE);
+        if (!animate || animationsOff(check.getContext())) {
+            return;
+        }
+        check.setAlpha(0f);
+        check.setScaleX(0.4f);
+        check.setScaleY(0.4f);
+        check.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(PAID_CHECK_MILLIS)
+                .setInterpolator(new OvershootInterpolator())
+                .start();
+    }
+
+    private static boolean animationsOff(Context context) {
+        return Settings.Global.getFloat(
+                context.getContentResolver(),
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f
+        ) == 0f;
     }
 
     static String shareStatus(Context context, Payment share) {

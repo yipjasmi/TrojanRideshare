@@ -7,8 +7,10 @@ import com.trojanrideshare.app.data.payment.PaymentDataAccess;
 import com.trojanrideshare.app.data.payment.PaymentRepository;
 import com.trojanrideshare.app.model.OrganizerRideSummary;
 import com.trojanrideshare.app.model.Payment;
+import com.trojanrideshare.app.model.PaymentHandles;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.RidePaymentDetails;
+import com.trojanrideshare.app.service.validation.PaymentValidator;
 import com.trojanrideshare.app.util.Money;
 
 import java.util.ArrayList;
@@ -125,14 +127,18 @@ public class PaymentService {
         List<String> participants = ride.getAllParticipantIds();
         repository.loadNames(participants, new PaymentRepository.NamesCallback() {
             @Override
-            public void onSuccess(Map<String, String> names) {
+            public void onSuccess(
+                    Map<String, String> names,
+                    Map<String, PaymentHandles> handles
+            ) {
                 if (userId.equals(ride.organizerId)) {
-                    loadRideShares(ride, participants, names, callback);
+                    loadRideShares(ride, participants, names, handles, callback);
                 } else {
                     callback.onSuccess(new RidePaymentDetails(
                             ride,
                             participants,
                             names,
+                            handles,
                             Collections.emptyList()
                     ));
                 }
@@ -144,6 +150,7 @@ public class PaymentService {
             Ride ride,
             List<String> participants,
             Map<String, String> names,
+            Map<String, PaymentHandles> handles,
             RideDetailsCallback callback
     ) {
         repository.loadRideShares(
@@ -152,9 +159,13 @@ public class PaymentService {
                 new PaymentRepository.SharesCallback() {
                     @Override
                     public void onSuccess(List<Payment> shares) {
-                        callback.onSuccess(
-                                new RidePaymentDetails(ride, participants, names, shares)
-                        );
+                        callback.onSuccess(new RidePaymentDetails(
+                                ride,
+                                participants,
+                                names,
+                                handles,
+                                shares
+                        ));
                     }
 
                     @Override
@@ -218,6 +229,26 @@ public class PaymentService {
                 rideId,
                 riderId,
                 updateCallback("Unable to flag this rider. ", callback)
+        );
+    }
+
+    public void saveHandles(
+            String userId,
+            String venmoInput,
+            String cashtagInput,
+            UpdateCallback callback
+    ) {
+        PaymentValidator.HandleResult venmo = PaymentValidator.venmoUsername(venmoInput);
+        PaymentValidator.HandleResult cashtag = PaymentValidator.cashtag(cashtagInput);
+        if (!venmo.isValid() || !cashtag.isValid()) {
+            callback.onError(venmo.isValid() ? cashtag.error : venmo.error);
+            return;
+        }
+        repository.saveHandles(
+                userId,
+                venmo.handle,
+                cashtag.handle,
+                updateCallback("Unable to save your payment apps. ", callback)
         );
     }
 
