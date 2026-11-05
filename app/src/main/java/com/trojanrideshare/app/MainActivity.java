@@ -9,6 +9,7 @@ import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.firebase.Timestamp;
@@ -31,6 +32,7 @@ import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.DepartureCountdown;
 import com.trojanrideshare.app.util.Money;
 import com.trojanrideshare.app.util.Motion;
+import com.trojanrideshare.app.util.PullToRefresh;
 import com.trojanrideshare.app.util.RideSeats;
 import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
@@ -48,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
         final View progress;
         final View error;
         boolean loaded;
+        boolean loading;
 
         Section(int stateId, int contentId, Runnable load) {
             View state = findViewById(stateId);
@@ -59,6 +62,7 @@ public class MainActivity extends AppCompatActivity {
 
         /** Only the first load shows the skeleton; a refresh keeps the last result up until it lands. */
         void showLoading() {
+            loading = true;
             if (loaded) {
                 return;
             }
@@ -69,16 +73,20 @@ public class MainActivity extends AppCompatActivity {
 
         void showContent() {
             loaded = true;
+            loading = false;
             progress.setVisibility(View.GONE);
             error.setVisibility(View.GONE);
             content.setVisibility(View.VISIBLE);
+            stopRefreshingWhenSettled();
         }
 
         void showError() {
             loaded = false;
+            loading = false;
             progress.setVisibility(View.GONE);
             error.setVisibility(View.VISIBLE);
             content.setVisibility(View.GONE);
+            stopRefreshingWhenSettled();
         }
     }
 
@@ -100,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
     private int balanceGeneration;
     private int requestsGeneration;
     private int notificationsGeneration;
+    private boolean notificationsLoading;
     private Ride nextRide;
 
     private View nextRideCard;
@@ -117,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView requestsWaitingText;
     private View notificationButton;
     private TextView notificationBadge;
+    private SwipeRefreshLayout homeRefresh;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -142,6 +152,8 @@ public class MainActivity extends AppCompatActivity {
         requestsWaitingText = findViewById(R.id.requestsWaiting);
         notificationButton = findViewById(R.id.headerNotificationButton);
         notificationBadge = findViewById(R.id.notificationBadge);
+        homeRefresh = findViewById(R.id.homeRefresh);
+        PullToRefresh.setUp(homeRefresh, this::loadHome);
 
         nextRideSection = new Section(R.id.nextRideState, R.id.nextRideContent, this::loadNextRide);
         moneySection = new Section(R.id.moneyState, R.id.moneyContent, this::loadBalance);
@@ -181,11 +193,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        loadGreeting();
-        loadNextRide();
-        loadBalance();
-        loadRequests();
-        loadUnreadNotifications();
+        loadHome();
         countdownHandler.postDelayed(countdownTick, COUNTDOWN_REFRESH_MILLIS);
     }
 
@@ -193,6 +201,22 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         countdownHandler.removeCallbacks(countdownTick);
+    }
+
+    private void loadHome() {
+        loadGreeting();
+        loadNextRide();
+        loadBalance();
+        loadRequests();
+        loadUnreadNotifications();
+    }
+
+    /** The pull to refresh spinner waits for all three sections and the bell. */
+    private void stopRefreshingWhenSettled() {
+        if (!nextRideSection.loading && !moneySection.loading && !requestsSection.loading
+                && !notificationsLoading) {
+            homeRefresh.setRefreshing(false);
+        }
     }
 
     /** Greets the user by their displayed nickname; refreshed on resume so edits show up. */
@@ -334,16 +358,22 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadUnreadNotifications() {
         int generation = ++notificationsGeneration;
+        notificationsLoading = true;
         homeService.loadUnreadNotificationCount(currentUserId(), new HomeService.CountCallback() {
             @Override
             public void onSuccess(int unread) {
                 if (isStale(generation, notificationsGeneration)) return;
                 bindNotificationBadge(unread);
+                notificationsLoading = false;
+                stopRefreshingWhenSettled();
             }
 
             @Override
             public void onError(String message) {
+                if (isStale(generation, notificationsGeneration)) return;
                 // Keep the badge as it was rather than claiming zero.
+                notificationsLoading = false;
+                stopRefreshingWhenSettled();
             }
         });
     }

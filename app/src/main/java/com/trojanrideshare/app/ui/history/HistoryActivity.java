@@ -18,6 +18,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.chip.ChipGroup;
@@ -38,6 +39,7 @@ import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
 import com.trojanrideshare.app.util.PlaceResolver;
 import com.trojanrideshare.app.util.PlacesLocationPicker;
+import com.trojanrideshare.app.util.PullToRefresh;
 import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
@@ -82,6 +84,7 @@ public class HistoryActivity extends AppCompatActivity {
     private TextView resultsHeader, resultsNote, message;
     private ProgressBar loading;
     private LinearLayout results;
+    private SwipeRefreshLayout refreshLayout;
 
     private final Calendar summaryMonth = Calendar.getInstance();
     private TextView summaryMonthLabel, summaryEmpty, summaryNote;
@@ -112,6 +115,8 @@ public class HistoryActivity extends AppCompatActivity {
         summaryNote = findViewById(R.id.summaryNote);
         summaryContent = findViewById(R.id.summaryContent);
         summaryRides = findViewById(R.id.summaryRides);
+        refreshLayout = findViewById(R.id.historyRefresh);
+        PullToRefresh.setUp(refreshLayout, this::load);
 
         setParticipantLabels();
         originUsing.setOnClickListener(v -> choosePlace(true));
@@ -149,13 +154,14 @@ public class HistoryActivity extends AppCompatActivity {
     }
 
     private void load() {
-        loading.setVisibility(View.VISIBLE);
+        loading.setVisibility(refreshLayout.isRefreshing() ? View.GONE : View.VISIBLE);
         message.setVisibility(View.GONE);
         results.removeAllViews();
         service.load(new HistoryService.Callback() {
             public void onSuccess(String userId, List<Ride> loaded, Map<String, Payment> shares) {
                 if (isFinishing() || isDestroyed()) return;
                 loading.setVisibility(View.GONE);
+                refreshLayout.setRefreshing(false);
                 uid = userId; rides = loaded; payments = shares;
                 updateParticipants();
                 render();
@@ -165,6 +171,7 @@ public class HistoryActivity extends AppCompatActivity {
             public void onError(String error) {
                 if (isFinishing() || isDestroyed()) return;
                 loading.setVisibility(View.GONE);
+                refreshLayout.setRefreshing(false);
                 uid = null; rides.clear(); payments.clear();
                 showMessage(error);
                 resultsNote.setText("");

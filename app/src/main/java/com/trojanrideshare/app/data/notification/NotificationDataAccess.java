@@ -1,17 +1,14 @@
 package com.trojanrideshare.app.data.notification;
 
+import android.util.Log;
+
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.model.Notification;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class NotificationDataAccess {
-    public interface WriteCallback {
-        void onSuccess();
-        void onError(Exception exception);
-    }
-
+public class NotificationDataAccess implements NotificationRepository {
     public interface ListCallback {
         void onSuccess(List<Notification> notifications);
         void onError(Exception exception);
@@ -28,11 +25,15 @@ public class NotificationDataAccess {
         this.firestore = firestore;
     }
 
+    @Override
     public void create(Notification notification, WriteCallback callback) {
         firestore.collection(NOTIFICATIONS_COLLECTION)
                 .add(notification)
                 .addOnSuccessListener(reference -> callback.onSuccess())
-                .addOnFailureListener(callback::onError);
+                .addOnFailureListener(exception -> {
+                    Log.w("Notifications", "Could not send a " + notification.type, exception);
+                    callback.onError(exception);
+                });
     }
 
     /** All notifications for the user. Ordering is left to the caller to avoid a composite index. */
@@ -43,9 +44,15 @@ public class NotificationDataAccess {
                 .addOnSuccessListener(snapshot -> {
                     List<Notification> notifications = new ArrayList<>();
                     snapshot.getDocuments().forEach(document -> {
-                        Notification notification = document.toObject(Notification.class);
-                        if (notification != null) {
-                            notifications.add(notification);
+                        // Any student can write a notification, so one with a wrong field type
+                        // is skipped instead of crashing the inbox and the Home bell.
+                        try {
+                            Notification notification = document.toObject(Notification.class);
+                            if (notification != null) {
+                                notifications.add(notification);
+                            }
+                        } catch (RuntimeException exception) {
+                            Log.w("Notifications", "Skipped a malformed notification", exception);
                         }
                     });
                     callback.onSuccess(notifications);

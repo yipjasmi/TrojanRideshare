@@ -198,7 +198,7 @@ public class PaymentDataAccess implements PaymentRepository {
             List<String> userIds,
             long[] shares,
             long finalCents,
-            UpdateCallback callback
+            ChangeCallback<Ride> callback
     ) {
         DocumentReference rideReference = firestore
                 .collection(RIDES_COLLECTION)
@@ -231,13 +231,13 @@ public class PaymentDataAccess implements PaymentRepository {
                         shareFields(ride, rideId, userId, shares[index])
                 );
             }
-            return null;
-        }).addOnSuccessListener(unused -> callback.onSuccess())
+            return ride;
+        }).addOnSuccessListener(callback::onSuccess)
                 .addOnFailureListener(exception -> handleUpdateFailure(exception, callback));
     }
 
     @Override
-    public void markPaid(String rideId, String userId, UpdateCallback callback) {
+    public void markPaid(String rideId, String userId, ChangeCallback<Payment> callback) {
         DocumentReference shareReference = shareDocument(rideId, userId);
         Map<String, Object> changes = new HashMap<>();
         changes.put("paid", true);
@@ -254,13 +254,13 @@ public class PaymentDataAccess implements PaymentRepository {
             if (!share.paid) {
                 transaction.update(shareReference, changes);
             }
-            return null;
-        }).addOnSuccessListener(unused -> callback.onSuccess())
+            return share;
+        }).addOnSuccessListener(callback::onSuccess)
                 .addOnFailureListener(exception -> handleUpdateFailure(exception, callback));
     }
 
     @Override
-    public void flag(String rideId, String riderId, UpdateCallback callback) {
+    public void flag(String rideId, String riderId, ChangeCallback<Payment> callback) {
         DocumentReference shareReference = shareDocument(rideId, riderId);
         long nowMillis = System.currentTimeMillis();
         Map<String, Object> changes = new HashMap<>();
@@ -282,8 +282,8 @@ public class PaymentDataAccess implements PaymentRepository {
             if (!share.flagged) {
                 transaction.update(shareReference, changes);
             }
-            return null;
-        }).addOnSuccessListener(unused -> callback.onSuccess())
+            return share;
+        }).addOnSuccessListener(callback::onSuccess)
                 .addOnFailureListener(exception -> handleUpdateFailure(exception, callback));
     }
 
@@ -337,7 +337,7 @@ public class PaymentDataAccess implements PaymentRepository {
                 .whereEqualTo("organizerId", organizerId);
     }
 
-    private static void handleUpdateFailure(Exception exception, UpdateCallback callback) {
+    private static void handleUpdateFailure(Exception exception, ChangeCallback<?> callback) {
         SubmissionException submissionException = findSubmissionException(exception);
         if (submissionException != null) {
             callback.onFailure(submissionException.failure);

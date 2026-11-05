@@ -171,6 +171,8 @@
     <string name="payment_apps_cashtag_prefix" translatable="false">$</string>
     <string name="payment_apps_save">Save</string>
     <string name="payment_apps_saved">Payment apps saved</string>
+    <string name="payment_apps_nudge">Add Venmo or Cash App so riders can pay you in one tap.</string>
+    <string name="payment_apps_nudge_action">Add payment apps</string>
     <string-array name="search_sort_options">
         <item>Earliest departure</item>
         <item>Latest departure</item>

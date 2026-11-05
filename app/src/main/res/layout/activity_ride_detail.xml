@@ -55,18 +55,35 @@
                     android:visibility="gone" />
 
                 <!-- Opens the organizer's profile; the chevron says it's tappable -->
-                <TextView
-                    android:id="@+id/detailOrganizer"
+                <LinearLayout
+                    android:id="@+id/detailOrganizerRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:background="?attr/selectableItemBackground"
-                    android:drawablePadding="12dp"
                     android:gravity="center_vertical"
                     android:minHeight="48dp"
-                    android:textAppearance="?attr/textAppearanceBodyLarge"
-                    app:drawableEndCompat="@drawable/ic_chevron_right"
-                    app:drawableStartCompat="@drawable/ic_person" />
+                    android:orientation="horizontal">
+
+                    <com.trojanrideshare.app.util.InitialsAvatarView
+                        android:id="@+id/detailOrganizerAvatar"
+                        style="@style/InitialsAvatar" />
+
+                    <TextView
+                        android:id="@+id/detailOrganizer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginStart="12dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_chevron_right" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/detailRoute"

@@ -9,6 +9,9 @@ public class Notification {
     public static final String TYPE_REQUEST_REJECTED = "requestRejected";
     public static final String TYPE_RIDE_UPDATED = "rideUpdated";
     public static final String TYPE_RIDE_CANCELLED = "rideCancelled";
+    public static final String TYPE_SHARE_ASSIGNED = "shareAssigned";
+    public static final String TYPE_SHARE_PAID = "sharePaid";
+    public static final String TYPE_SHARE_FLAGGED = "shareFlagged";
 
     @DocumentId public String id;
     public String userId;

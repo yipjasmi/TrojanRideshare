@@ -26,6 +26,7 @@ import com.trojanrideshare.app.model.RidePaymentDetails;
 import com.trojanrideshare.app.service.payment.CostSplitter;
 import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.service.validation.PaymentValidator;
+import com.trojanrideshare.app.util.Haptics;
 import com.trojanrideshare.app.util.Money;
 
 import java.util.ArrayList;
@@ -388,6 +389,7 @@ public class RecordCostActivity extends AppCompatActivity {
                     public void onSuccess() {
                         setSaving(false);
                         if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
+                            Haptics.confirm(reviewButton);
                             showSavedRide();
                         }
                     }
@@ -396,6 +398,7 @@ public class RecordCostActivity extends AppCompatActivity {
                     public void onError(String message) {
                         setSaving(false);
                         showFormError(message);
+                        Haptics.reject(reviewButton);
                     }
                 }
         );

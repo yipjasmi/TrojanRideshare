@@ -12,6 +12,7 @@ import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -29,6 +30,9 @@ import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.Haptics;
+import com.trojanrideshare.app.util.InitialsAvatarView;
+import com.trojanrideshare.app.util.PullToRefresh;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
@@ -46,9 +50,12 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     private String organizerId;
     private TextView myRequestsStatus;
     private LinearLayout myRequestsContainer;
+    private SwipeRefreshLayout refreshLayout;
+    private boolean requestsLoading;
+    private boolean myRequestsLoading;
     private final UserDataAccess userDataAccess = new UserDataAccess();
     private final RideMembershipDataAccess membershipDataAccess = new RideMembershipDataAccess();
-    private final Map<String, String> displayNames = new HashMap<>();
+    private final Map<String, User> requesters = new HashMap<>();
 
     private String getOrganizerId() {
         String id = getIntent().getStringExtra(EXTRA_ORGANIZER_ID);
@@ -74,6 +81,8 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         myRequestsStatus = findViewById(R.id.myRequestsStatus);
         myRequestsContainer = findViewById(R.id.myRequestsContainer);
         organizerId = getOrganizerId();
+        refreshLayout = findViewById(R.id.organizerRequestsRefresh);
+        PullToRefresh.setUp(refreshLayout, this::loadAll);
 
         MaterialToolbar toolbar = findViewById(R.id.organizerRequestsToolbar);
         toolbar.setNavigationOnClickListener(view -> navigateToHome());
@@ -89,8 +98,18 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        loadAll();
+    }
+
+    private void loadAll() {
         loadRequests();
         loadMyRequests();
+    }
+
+    private void stopRefreshingWhenSettled() {
+        if (!requestsLoading && !myRequestsLoading) {
+            refreshLayout.setRefreshing(false);
+        }
     }
 
     private void loadRequests() {
@@ -115,10 +134,14 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     }
 
     private void setLoading(boolean loading) {
-        loadingIndicator.setVisibility(loading ? View.VISIBLE : View.GONE);
+        requestsLoading = loading;
+        loadingIndicator.setVisibility(
+                loading && !refreshLayout.isRefreshing() ? View.VISIBLE : View.GONE);
         if (loading) {
             statusMessage.setVisibility(View.GONE);
             requestsContainer.removeAllViews();
+        } else {
+            stopRefreshingWhenSettled();
         }
     }
 
@@ -152,14 +175,17 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         String requesterId = item.request.requesterId;
         riderView.setText(getString(R.string.organizer_request_rider, nameFor(requesterId))
                 + requestedAt(item.request));
-        if (!displayNames.containsKey(requesterId)) {
+        InitialsAvatarView avatar = view.findViewById(R.id.organizerRequestAvatar);
+        avatar.setUser(requesters.get(requesterId));
+        if (!requesters.containsKey(requesterId)) {
             userDataAccess.getById(requesterId, new UserDataAccess.SingleCallback() {
                 @Override
                 public void onSuccess(User user) {
                     if (user != null) {
-                        displayNames.put(requesterId, user.getDisplayName());
+                        requesters.put(requesterId, user);
                         riderView.setText(getString(R.string.organizer_request_rider,
                                 user.getDisplayName()) + requestedAt(item.request));
+                        avatar.setUser(user);
                     }
                 }
 
@@ -226,6 +252,9 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
                 new JoinRequestService.DecisionCallback() {
                     @Override
                     public void onSuccess() {
+                        // setLoading(true) already removed the tapped row, and a detached view
+                        // gives no haptic feedback, so these go on the list that held it.
+                        Haptics.confirm(requestsContainer);
                         Toast.makeText(
                                 OrganizerRequestsActivity.this,
                                 accepting
@@ -238,6 +267,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                     @Override
                     public void onUnavailable(String message) {
+                        Haptics.reject(requestsContainer);
                         Toast.makeText(
                                 OrganizerRequestsActivity.this,
                                 message,
@@ -248,6 +278,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                     @Override
                     public void onError(String message) {
+                        Haptics.reject(requestsContainer);
                         setLoading(false);
                         Toast.makeText(
                                 OrganizerRequestsActivity.this,
@@ -277,17 +308,22 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
     private void loadMyRequests() {
         if (organizerId == null) return;
+        myRequestsLoading = true;
         membershipDataAccess.loadMyRequests(organizerId, new RideMembershipDataAccess.RequestsCallback() {
             @Override
             public void onSuccess(List<OrganizerJoinRequest> requests) {
+                myRequestsLoading = false;
                 renderMyRequests(requests);
+                stopRefreshingWhenSettled();
             }
 
             @Override
             public void onError(Exception exception) {
+                myRequestsLoading = false;
                 myRequestsContainer.removeAllViews();
                 myRequestsStatus.setText("Unable to load your requests.");
                 myRequestsStatus.setVisibility(View.VISIBLE);
+                stopRefreshingWhenSettled();
             }
         });
     }
@@ -308,6 +344,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
             ((TextView) view.findViewById(R.id.organizerRequestRideTitle)).setText(title);
             ((TextView) view.findViewById(R.id.organizerRequestRider)).setText(
                     "Request: " + requestStatusLabel(item) + requestedAt(item.request));
+            view.findViewById(R.id.organizerRequestAvatar).setVisibility(View.GONE);
             TextView messageView = view.findViewById(R.id.organizerRequestMessage);
             if (item.request.message == null || item.request.message.trim().isEmpty()) {
                 messageView.setVisibility(View.GONE);
@@ -322,7 +359,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
             Button cancelButton = view.findViewById(R.id.organizerRequestReject);
             if (JoinRequest.PENDING.equals(item.request.status)) {
                 cancelButton.setText(R.string.join_request_cancel_action);
-                cancelButton.setOnClickListener(unused -> confirmCancelMine(item, title));
+                cancelButton.setOnClickListener(tapped -> confirmCancelMine(item, title, tapped));
             } else {
                 cancelButton.setVisibility(View.GONE);
             }
@@ -331,7 +368,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         }
     }
 
-    private void confirmCancelMine(OrganizerJoinRequest item, String title) {
+    private void confirmCancelMine(OrganizerJoinRequest item, String title, View cancelButton) {
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.join_request_cancel_title)
                 .setMessage(getString(R.string.join_request_cancel_message, title))
@@ -341,6 +378,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
                                 new JoinRequestService.CancelCallback() {
                                     @Override
                                     public void onSuccess() {
+                                        Haptics.confirm(cancelButton);
                                         Toast.makeText(OrganizerRequestsActivity.this,
                                                 R.string.join_request_cancelled, Toast.LENGTH_LONG).show();
                                         loadMyRequests();
@@ -348,6 +386,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                                     @Override
                                     public void onNotPending() {
+                                        Haptics.reject(cancelButton);
                                         Toast.makeText(OrganizerRequestsActivity.this,
                                                 R.string.join_request_not_pending, Toast.LENGTH_LONG).show();
                                         loadMyRequests();
@@ -355,6 +394,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                                     @Override
                                     public void onError(String message) {
+                                        Haptics.reject(cancelButton);
                                         Toast.makeText(OrganizerRequestsActivity.this, message,
                                                 Toast.LENGTH_LONG).show();
                                     }
@@ -381,8 +421,8 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     }
 
     private String nameFor(String userId) {
-        String name = displayNames.get(userId);
-        return name != null ? name : "a student";
+        User user = requesters.get(userId);
+        return user != null ? user.getDisplayName() : "a student";
     }
 
     private static String requestedAt(JoinRequest request) {

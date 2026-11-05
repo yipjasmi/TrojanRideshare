@@ -47,6 +47,14 @@ public interface PaymentRepository {
         void onError(Exception exception);
     }
 
+    // Gets the document as the transaction read it, before writing. Marking a paid share paid, or
+    // flagging a flagged one, succeeds without a write, and this is the only way to tell.
+    interface ChangeCallback<T> {
+        void onSuccess(T before);
+        void onFailure(Failure failure);
+        void onError(Exception exception);
+    }
+
     void loadRide(String rideId, RideCallback callback);
     void loadCompletedRides(String organizerId, RidesCallback callback);
     void loadSharesFor(String userId, SharesCallback callback);
@@ -66,10 +74,10 @@ public interface PaymentRepository {
             List<String> userIds,
             long[] shares,
             long finalCents,
-            UpdateCallback callback
+            ChangeCallback<Ride> callback
     );
-    void markPaid(String rideId, String userId, UpdateCallback callback);
-    void flag(String rideId, String riderId, UpdateCallback callback);
+    void markPaid(String rideId, String userId, ChangeCallback<Payment> callback);
+    void flag(String rideId, String riderId, ChangeCallback<Payment> callback);
     void saveHandles(
             String userId,
             String venmoUsername,

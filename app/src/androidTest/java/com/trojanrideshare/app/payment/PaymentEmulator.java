@@ -127,20 +127,20 @@ final class PaymentEmulator {
                 participants,
                 shares,
                 finalCents,
-                completing(done)
+                changing(done)
         );
         return done.getTask();
     }
 
     static Task<Void> markPaid(String rideId, String userId) {
         TaskCompletionSource<Void> done = new TaskCompletionSource<>();
-        new PaymentDataAccess().markPaid(rideId, userId, completing(done));
+        new PaymentDataAccess().markPaid(rideId, userId, changing(done));
         return done.getTask();
     }
 
     static Task<Void> flag(String rideId, String riderId) {
         TaskCompletionSource<Void> done = new TaskCompletionSource<>();
-        new PaymentDataAccess().flag(rideId, riderId, completing(done));
+        new PaymentDataAccess().flag(rideId, riderId, changing(done));
         return done.getTask();
     }
 
@@ -154,6 +154,27 @@ final class PaymentEmulator {
         return new PaymentRepository.UpdateCallback() {
             @Override
             public void onSuccess() {
+                done.setResult(null);
+            }
+
+            @Override
+            public void onFailure(PaymentRepository.Failure failure) {
+                done.setException(new ReportedFailure(failure));
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                done.setException(exception);
+            }
+        };
+    }
+
+    private static <T> PaymentRepository.ChangeCallback<T> changing(
+            TaskCompletionSource<Void> done
+    ) {
+        return new PaymentRepository.ChangeCallback<T>() {
+            @Override
+            public void onSuccess(T before) {
                 done.setResult(null);
             }
 

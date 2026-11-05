@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -18,6 +19,7 @@ import com.trojanrideshare.app.model.OrganizerRideSummary;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.util.Money;
+import com.trojanrideshare.app.util.PullToRefresh;
 
 import java.util.List;
 
@@ -28,6 +30,7 @@ public class PaymentsActivity extends AppCompatActivity {
         final Button retry;
         final LinearLayout rows;
         boolean loaded;
+        boolean loading;
         boolean empty = true;
 
         Section(int rootId, int titleRes, Runnable load) {
@@ -44,6 +47,7 @@ public class PaymentsActivity extends AppCompatActivity {
 
         void showRows() {
             loaded = true;
+            loading = false;
             empty = rows.getChildCount() == 0;
             error.setVisibility(View.GONE);
             retry.setVisibility(View.GONE);
@@ -53,6 +57,7 @@ public class PaymentsActivity extends AppCompatActivity {
 
         void showError(String message) {
             loaded = true;
+            loading = false;
             empty = false;
             error.setText(message);
             retry.setEnabled(true);
@@ -70,6 +75,7 @@ public class PaymentsActivity extends AppCompatActivity {
     private View stateContainer;
     private View stateProgress;
     private TextView stateMessage;
+    private SwipeRefreshLayout refreshLayout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,6 +106,8 @@ public class PaymentsActivity extends AppCompatActivity {
                 R.string.payment_section_rides,
                 this::loadRides
         );
+        refreshLayout = findViewById(R.id.paymentsRefresh);
+        PullToRefresh.setUp(refreshLayout, this::loadAll);
     }
 
     @Override
@@ -107,9 +115,13 @@ public class PaymentsActivity extends AppCompatActivity {
         super.onStart();
         if (currentUserId != null) {
             refreshPageState();
-            loadShares();
-            loadRides();
+            loadAll();
         }
+    }
+
+    private void loadAll() {
+        loadShares();
+        loadRides();
     }
 
     private void refreshPageState() {
@@ -118,9 +130,13 @@ public class PaymentsActivity extends AppCompatActivity {
         stateContainer.setVisibility(!allLoaded || allEmpty ? View.VISIBLE : View.GONE);
         stateProgress.setVisibility(allLoaded ? View.GONE : View.VISIBLE);
         stateMessage.setVisibility(allEmpty ? View.VISIBLE : View.GONE);
+        if (!sharesSection.loading && !ridesSection.loading) {
+            refreshLayout.setRefreshing(false);
+        }
     }
 
     private void loadShares() {
+        sharesSection.loading = true;
         paymentService.loadMyShares(currentUserId, new PaymentService.SharesCallback() {
             @Override
             public void onSuccess(List<Payment> shares) {
@@ -151,6 +167,7 @@ public class PaymentsActivity extends AppCompatActivity {
     }
 
     private void loadRides() {
+        ridesSection.loading = true;
         paymentService.loadMyRides(currentUserId, new PaymentService.RideSummariesCallback() {
             @Override
             public void onSuccess(List<OrganizerRideSummary> summaries) {

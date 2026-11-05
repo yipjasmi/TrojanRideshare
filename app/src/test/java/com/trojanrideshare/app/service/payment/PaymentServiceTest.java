@@ -9,7 +9,9 @@ import static org.junit.Assert.assertTrue;
 import android.app.Activity;
 
 import com.google.firebase.Timestamp;
+import com.trojanrideshare.app.data.notification.NotificationRepository;
 import com.trojanrideshare.app.data.payment.PaymentRepository;
+import com.trojanrideshare.app.model.Notification;
 import com.trojanrideshare.app.model.OrganizerRideSummary;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.model.PaymentHandles;
@@ -264,9 +266,11 @@ public class PaymentServiceTest {
 
     @Test
     public void saveSplit_reportsSuccess() {
+        FakeRepository repository = new FakeRepository();
+        repository.ride = ride("ride-1", ORGANIZER_ID, Ride.STATUS_COMPLETED, RIDER_ID);
         UpdateResult result = new UpdateResult();
 
-        new PaymentService(new FakeRepository()).saveSplit(
+        new PaymentService(repository).saveSplit(
                 "ride-1",
                 ORGANIZER_ID,
                 Arrays.asList(ORGANIZER_ID, RIDER_ID),
@@ -299,6 +303,152 @@ public class PaymentServiceTest {
         new PaymentService(repository).flag("ride-1", RIDER_ID, result);
 
         assertEquals("You can flag a rider once 7 days have passed.", result.error);
+    }
+
+    @Test
+    public void saveSplit_notifiesTheRidersOnceTheSplitIsSaved() {
+        FakeRepository repository = new FakeRepository();
+        repository.ride = ride("ride-1", ORGANIZER_ID, Ride.STATUS_COMPLETED, RIDER_ID);
+        repository.names.put(ORGANIZER_ID, "Ashley");
+        FakeNotifications notifications = new FakeNotifications();
+        UpdateResult result = new UpdateResult();
+
+        saveSplit(new PaymentService(repository, notifications), result);
+
+        assertEquals(1, result.successCount);
+        assertEquals(1, notifications.created.size());
+        assertEquals(RIDER_ID, notifications.created.get(0).userId);
+        assertEquals(Notification.TYPE_SHARE_ASSIGNED, notifications.created.get(0).type);
+        assertEquals(
+                "Your share of \"Untitled ride\" is $5.00. Pay Ashley and mark it paid.",
+                notifications.created.get(0).message
+        );
+    }
+
+    @Test
+    public void saveSplit_notifiesNobodyWhenTheSaveIsRefused() {
+        FakeRepository repository = new FakeRepository();
+        repository.failure = PaymentRepository.Failure.SPLIT_LOCKED;
+        FakeNotifications notifications = new FakeNotifications();
+        UpdateResult result = new UpdateResult();
+
+        saveSplit(new PaymentService(repository, notifications), result);
+
+        assertNotNull(result.error);
+        assertTrue(notifications.created.isEmpty());
+    }
+
+    @Test
+    public void saveSplit_stillSucceedsWhenANotificationFails() {
+        FakeRepository repository = new FakeRepository();
+        repository.ride = ride("ride-1", ORGANIZER_ID, Ride.STATUS_COMPLETED, RIDER_ID);
+        FakeNotifications notifications = new FakeNotifications();
+        notifications.exception = new IllegalStateException("network");
+        UpdateResult result = new UpdateResult();
+
+        saveSplit(new PaymentService(repository, notifications), result);
+
+        assertEquals(1, notifications.created.size());
+        assertEquals(1, result.successCount);
+        assertNull(result.error);
+    }
+
+    @Test
+    public void markPaid_tellsTheOrganizerWhoPaid() {
+        FakeRepository repository = new FakeRepository();
+        repository.shareBefore = share("ride-1", RIDER_ID, 15, false);
+        repository.shareBefore.rideTitle = "LAX run";
+        repository.names.put(RIDER_ID, "Kyle");
+        FakeNotifications notifications = new FakeNotifications();
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository, notifications).markPaid("ride-1", RIDER_ID, result);
+
+        assertEquals(1, result.successCount);
+        assertEquals(1, notifications.created.size());
+        assertEquals(ORGANIZER_ID, notifications.created.get(0).userId);
+        assertEquals(Notification.TYPE_SHARE_PAID, notifications.created.get(0).type);
+        assertEquals(
+                "Kyle marked their $15.00 share of \"LAX run\" as paid.",
+                notifications.created.get(0).message
+        );
+    }
+
+    @Test
+    public void markPaid_notifiesNobodyWhenItFails() {
+        FakeRepository repository = new FakeRepository();
+        repository.exception = new IllegalStateException("network");
+        FakeNotifications notifications = new FakeNotifications();
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository, notifications).markPaid("ride-1", RIDER_ID, result);
+
+        assertNotNull(result.error);
+        assertTrue(notifications.created.isEmpty());
+    }
+
+    @Test
+    public void markPaid_stillSucceedsWhenTheNotificationFails() {
+        FakeRepository repository = new FakeRepository();
+        repository.shareBefore = share("ride-1", RIDER_ID, 15, false);
+        FakeNotifications notifications = new FakeNotifications();
+        notifications.exception = new IllegalStateException("network");
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository, notifications).markPaid("ride-1", RIDER_ID, result);
+
+        assertEquals(1, notifications.created.size());
+        assertEquals(1, result.successCount);
+        assertNull(result.error);
+    }
+
+    @Test
+    public void flag_tellsTheRiderTheyWereFlagged() {
+        FakeRepository repository = new FakeRepository();
+        repository.shareBefore = share("ride-1", RIDER_ID, 15, false);
+        repository.shareBefore.rideTitle = "LAX run";
+        repository.names.put(ORGANIZER_ID, "Ashley");
+        FakeNotifications notifications = new FakeNotifications();
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository, notifications).flag("ride-1", RIDER_ID, result);
+
+        assertEquals(1, result.successCount);
+        assertEquals(1, notifications.created.size());
+        assertEquals(RIDER_ID, notifications.created.get(0).userId);
+        assertEquals(Notification.TYPE_SHARE_FLAGGED, notifications.created.get(0).type);
+        assertEquals(
+                "Ashley flagged your unpaid $15.00 share of \"LAX run\".",
+                notifications.created.get(0).message
+        );
+    }
+
+    @Test
+    public void flag_notifiesNobodyWhenRefused() {
+        FakeRepository repository = new FakeRepository();
+        repository.failure = PaymentRepository.Failure.NOT_OVERDUE;
+        FakeNotifications notifications = new FakeNotifications();
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository, notifications).flag("ride-1", RIDER_ID, result);
+
+        assertNotNull(result.error);
+        assertTrue(notifications.created.isEmpty());
+    }
+
+    @Test
+    public void flag_stillSucceedsWhenTheNotificationFails() {
+        FakeRepository repository = new FakeRepository();
+        repository.shareBefore = share("ride-1", RIDER_ID, 15, false);
+        FakeNotifications notifications = new FakeNotifications();
+        notifications.exception = new IllegalStateException("network");
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository, notifications).flag("ride-1", RIDER_ID, result);
+
+        assertEquals(1, notifications.created.size());
+        assertEquals(1, result.successCount);
+        assertNull(result.error);
     }
 
     @Test
@@ -379,6 +529,17 @@ public class PaymentServiceTest {
         return result.error;
     }
 
+    private static void saveSplit(PaymentService service, UpdateResult result) {
+        service.saveSplit(
+                "ride-1",
+                ORGANIZER_ID,
+                Arrays.asList(ORGANIZER_ID, RIDER_ID),
+                new long[] {500, 500},
+                1000,
+                result
+        );
+    }
+
     private static Ride ride(String id, String organizerId, String status, String... riders) {
         Ride ride = new Ride();
         ride.id = id;
@@ -402,6 +563,8 @@ public class PaymentServiceTest {
         private Ride ride;
         private List<Ride> rides = new ArrayList<>();
         private List<Payment> shares = new ArrayList<>();
+        private Payment shareBefore;
+        private Map<String, String> names = new HashMap<>();
         private Failure failure;
         private Exception exception;
         private Exception sharesException;
@@ -447,7 +610,6 @@ public class PaymentServiceTest {
 
         @Override
         public void loadNames(Collection<String> userIds, NamesCallback callback) {
-            Map<String, String> names = new HashMap<>();
             callback.onSuccess(names, handles);
         }
 
@@ -478,19 +640,19 @@ public class PaymentServiceTest {
                 List<String> userIds,
                 long[] shareCents,
                 long finalCents,
-                UpdateCallback callback
+                ChangeCallback<Ride> callback
         ) {
-            completeUpdate(callback);
+            completeChange(callback, ride);
         }
 
         @Override
-        public void markPaid(String rideId, String userId, UpdateCallback callback) {
-            completeUpdate(callback);
+        public void markPaid(String rideId, String userId, ChangeCallback<Payment> callback) {
+            completeChange(callback, shareBefore);
         }
 
         @Override
-        public void flag(String rideId, String riderId, UpdateCallback callback) {
-            completeUpdate(callback);
+        public void flag(String rideId, String riderId, ChangeCallback<Payment> callback) {
+            completeChange(callback, shareBefore);
         }
 
         @Override
@@ -511,6 +673,31 @@ public class PaymentServiceTest {
                 callback.onError(exception);
             } else if (failure != null) {
                 callback.onFailure(failure);
+            } else {
+                callback.onSuccess();
+            }
+        }
+
+        private <T> void completeChange(ChangeCallback<T> callback, T before) {
+            if (exception != null) {
+                callback.onError(exception);
+            } else if (failure != null) {
+                callback.onFailure(failure);
+            } else {
+                callback.onSuccess(before);
+            }
+        }
+    }
+
+    private static final class FakeNotifications implements NotificationRepository {
+        private final List<Notification> created = new ArrayList<>();
+        private Exception exception;
+
+        @Override
+        public void create(Notification notification, WriteCallback callback) {
+            created.add(notification);
+            if (exception != null) {
+                callback.onError(exception);
             } else {
                 callback.onSuccess();
             }

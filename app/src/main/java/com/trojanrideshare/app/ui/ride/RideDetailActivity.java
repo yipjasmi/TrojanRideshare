@@ -3,6 +3,7 @@ package com.trojanrideshare.app.ui.ride;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.format.DateUtils;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -38,6 +39,8 @@ import com.trojanrideshare.app.service.ride.RideTimelineService;
 import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.Haptics;
+import com.trojanrideshare.app.util.InitialsAvatarView;
 import com.trojanrideshare.app.util.Money;
 import com.trojanrideshare.app.util.Motion;
 import com.trojanrideshare.app.util.RideSeats;
@@ -63,6 +66,7 @@ public class RideDetailActivity extends AppCompatActivity {
     private View loadingIndicator;
     private LinearLayout content;
     private TextView detailTitle;
+    private InitialsAvatarView organizerAvatar;
     private TextView infoMessage;
     private MaterialButton joinButton;
     private Button editRideButton;
@@ -114,6 +118,7 @@ public class RideDetailActivity extends AppCompatActivity {
         loadingIndicator = findViewById(R.id.detailLoadingIndicator);
         content = findViewById(R.id.detailContent);
         detailTitle = findViewById(R.id.detailTitle);
+        organizerAvatar = findViewById(R.id.detailOrganizerAvatar);
         infoMessage = findViewById(R.id.detailInfoMessage);
         joinButton = findViewById(R.id.joinButton);
         editRideButton = findViewById(R.id.editRideButton);
@@ -202,7 +207,8 @@ public class RideDetailActivity extends AppCompatActivity {
         setText(R.id.detailOrganizer, getString(
                 R.string.ride_detail_organizer_format,
                 getString(R.string.ride_detail_unknown_organizer)));
-        findViewById(R.id.detailOrganizer).setOnClickListener(v -> {
+        organizerAvatar.setUser(null);
+        findViewById(R.id.detailOrganizerRow).setOnClickListener(v -> {
             if (ride != null && ride.organizerId != null) {
                 Intent intent = new Intent(this, ProfileActivity.class);
                 intent.putExtra(ProfileActivity.EXTRA_USER_ID, ride.organizerId);
@@ -427,23 +433,15 @@ public class RideDetailActivity extends AppCompatActivity {
     private void renderRiders(Ride ride) {
         LinearLayout container = findViewById(R.id.detailRidersContainer);
         container.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(this);
         for (String riderId : ride.getAllParticipantIds()) {
             boolean organizer = riderId.equals(ride.organizerId);
             boolean me = riderId.equals(currentUserId);
-            TextView row = new TextView(this);
-            row.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge);
-            int pad = (int) (10 * getResources().getDisplayMetrics().density);
-            row.setPadding(0, pad, 0, pad);
-            android.util.TypedValue ripple = new android.util.TypedValue();
-            getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);
-            row.setBackgroundResource(ripple.resourceId);
-            row.setMinHeight((int) (48 * getResources().getDisplayMetrics().density));
-            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            row.setCompoundDrawablePadding((int) (12 * getResources().getDisplayMetrics().density));
-            row.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                    R.drawable.ic_person, 0, R.drawable.ic_chevron_right, 0);
+            View row = inflater.inflate(R.layout.item_ride_rider, container, false);
+            TextView name = row.findViewById(R.id.riderName);
+            InitialsAvatarView avatar = row.findViewById(R.id.riderAvatar);
             String suffix = (organizer ? " · Organizer" : "") + (me ? " (you)" : "");
-            row.setText("Loading…" + suffix);
+            name.setText("Loading…" + suffix);
             row.setOnClickListener(v -> {
                 Intent intent = new Intent(this, ProfileActivity.class);
                 intent.putExtra(ProfileActivity.EXTRA_USER_ID, riderId);
@@ -453,12 +451,13 @@ public class RideDetailActivity extends AppCompatActivity {
             userDataAccess.getById(riderId, new UserDataAccess.SingleCallback() {
                 @Override
                 public void onSuccess(User user) {
-                    row.setText((user == null ? "A student" : user.getDisplayName()) + suffix);
+                    name.setText((user == null ? "A student" : user.getDisplayName()) + suffix);
+                    avatar.setUser(user);
                 }
 
                 @Override
                 public void onError(Exception exception) {
-                    row.setText("A student" + suffix);
+                    name.setText("A student" + suffix);
                 }
             });
         }
@@ -474,6 +473,7 @@ public class RideDetailActivity extends AppCompatActivity {
                 if (user != null) {
                     setText(R.id.detailOrganizer, getString(
                             R.string.ride_detail_organizer_format, user.getDisplayName()));
+                    organizerAvatar.setUser(user);
                 }
             }
 
@@ -587,6 +587,7 @@ public class RideDetailActivity extends AppCompatActivity {
         editRideService.cancelRide(ride, currentUserId, new EditRideService.Callback() {
             @Override
             public void onSuccess() {
+                Haptics.confirm(cancelRideButton);
                 cancelRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, "Ride cancelled.", Toast.LENGTH_LONG).show();
                 loadRide(ride.id);
@@ -594,12 +595,14 @@ public class RideDetailActivity extends AppCompatActivity {
 
             @Override
             public void onDenied(String reason) {
+                Haptics.reject(cancelRideButton);
                 cancelRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, reason, Toast.LENGTH_LONG).show();
             }
 
             @Override
             public void onError(String message) {
+                Haptics.reject(cancelRideButton);
                 cancelRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
             }
@@ -612,6 +615,7 @@ public class RideDetailActivity extends AppCompatActivity {
         }
         String error = LeaveRideService.leaveError(ride, currentUserId, Timestamp.now());
         if (error != null) {
+            Haptics.reject(leaveRideButton);
             new MaterialAlertDialogBuilder(this)
                     .setTitle("Can't leave this ride")
                     .setMessage(error)
@@ -666,6 +670,7 @@ public class RideDetailActivity extends AppCompatActivity {
         leaveRideService.leave(ride, currentUserId, new LeaveRideService.Callback() {
             @Override
             public void onSuccess(LeaveRideService.Plan plan) {
+                Haptics.confirm(leaveRideButton);
                 leaveRideButton.setEnabled(true);
                 String done = plan.outcome == LeaveRideService.Outcome.RIDE_CANCELLED
                         ? "You left, and the ride was cancelled."
@@ -678,6 +683,7 @@ public class RideDetailActivity extends AppCompatActivity {
 
             @Override
             public void onDenied(String reason) {
+                Haptics.reject(leaveRideButton);
                 leaveRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, reason, Toast.LENGTH_LONG).show();
                 loadRide(ride.id);
@@ -685,6 +691,7 @@ public class RideDetailActivity extends AppCompatActivity {
 
             @Override
             public void onError(String message) {
+                Haptics.reject(leaveRideButton);
                 leaveRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
             }
@@ -696,18 +703,21 @@ public class RideDetailActivity extends AppCompatActivity {
         joinRequestService.submit(ride, currentUserId, message, new JoinRequestService.Callback() {
             @Override
             public void onSuccess(JoinRequest request) {
+                Haptics.confirm(joinButton);
                 showRequestPending();
                 showInfo(getString(R.string.join_request_success));
             }
 
             @Override
             public void onAlreadyRequested() {
+                Haptics.reject(joinButton);
                 showRequestPending();
                 showInfo(getString(R.string.join_request_duplicate));
             }
 
             @Override
             public void onError(String message) {
+                Haptics.reject(joinButton);
                 joinButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
             }

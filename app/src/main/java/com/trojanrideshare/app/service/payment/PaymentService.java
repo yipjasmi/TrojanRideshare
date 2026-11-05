@@ -3,8 +3,11 @@ package com.trojanrideshare.app.service.payment;
 import android.app.Activity;
 
 import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.trojanrideshare.app.data.notification.NotificationDataAccess;
+import com.trojanrideshare.app.data.notification.NotificationRepository;
 import com.trojanrideshare.app.data.payment.PaymentDataAccess;
 import com.trojanrideshare.app.data.payment.PaymentRepository;
+import com.trojanrideshare.app.model.Notification;
 import com.trojanrideshare.app.model.OrganizerRideSummary;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.model.PaymentHandles;
@@ -20,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public class PaymentService {
     public interface SharesCallback {
@@ -43,13 +47,20 @@ public class PaymentService {
     }
 
     private final PaymentRepository repository;
+    // Null in the one-argument test constructor, which sends no notifications.
+    private final NotificationRepository notificationRepository;
 
     public PaymentService() {
-        this(new PaymentDataAccess());
+        this(new PaymentDataAccess(), new NotificationDataAccess());
     }
 
     PaymentService(PaymentRepository repository) {
+        this(repository, null);
+    }
+
+    PaymentService(PaymentRepository repository, NotificationRepository notificationRepository) {
         this.repository = repository;
+        this.notificationRepository = notificationRepository;
     }
 
     public void loadMyShares(String userId, SharesCallback callback) {
@@ -212,7 +223,11 @@ public class PaymentService {
                 participants,
                 shares,
                 finalCents,
-                updateCallback("Unable to save this split. ", callback)
+                changeCallback(
+                        "Unable to save this split. ",
+                        callback,
+                        before -> notifyShareAssigned(before, participants, shares)
+                )
         );
     }
 
@@ -220,7 +235,11 @@ public class PaymentService {
         repository.markPaid(
                 rideId,
                 userId,
-                updateCallback("Unable to mark this share paid. ", callback)
+                changeCallback(
+                        "Unable to mark this share paid. ",
+                        callback,
+                        this::notifySharePaid
+                )
         );
     }
 
@@ -228,8 +247,55 @@ public class PaymentService {
         repository.flag(
                 rideId,
                 riderId,
-                updateCallback("Unable to flag this rider. ", callback)
+                changeCallback(
+                        "Unable to flag this rider. ",
+                        callback,
+                        this::notifyShareFlagged
+                )
         );
+    }
+
+    private void notifyShareAssigned(Ride before, List<String> participants, long[] shares) {
+        repository.loadNames(
+                Collections.singletonList(before.organizerId),
+                (names, handles) -> send(
+                        PaymentNotifications.shareAssigned(before, participants, shares, names)
+                )
+        );
+    }
+
+    private void notifySharePaid(Payment before) {
+        repository.loadNames(
+                Collections.singletonList(before.userId),
+                (names, handles) -> send(PaymentNotifications.sharePaid(before, names))
+        );
+    }
+
+    private void notifyShareFlagged(Payment before) {
+        repository.loadNames(
+                Collections.singletonList(before.organizerId),
+                (names, handles) -> send(PaymentNotifications.shareFlagged(before, names))
+        );
+    }
+
+    private void send(List<Notification> notifications) {
+        if (notificationRepository == null) {
+            return;
+        }
+        for (Notification notification : notifications) {
+            notificationRepository.create(
+                    notification,
+                    new NotificationRepository.WriteCallback() {
+                        @Override
+                        public void onSuccess() {}
+
+                        // The payment already went through. A missed notification must not
+                        // turn that into an error; the data layer logs it.
+                        @Override
+                        public void onError(Exception exception) {}
+                    }
+            );
+        }
     }
 
     public void saveHandles(
@@ -305,6 +371,32 @@ public class PaymentService {
             @Override
             public void onError(Exception exception) {
                 callback.onError(errorPrefix + errorDetail(exception));
+            }
+        };
+    }
+
+    // The screen hears about the write first, so nothing in notifying can hold it up or fail it.
+    private static <T> PaymentRepository.ChangeCallback<T> changeCallback(
+            String errorPrefix,
+            UpdateCallback callback,
+            Consumer<T> notifier
+    ) {
+        PaymentRepository.UpdateCallback update = updateCallback(errorPrefix, callback);
+        return new PaymentRepository.ChangeCallback<T>() {
+            @Override
+            public void onSuccess(T before) {
+                update.onSuccess();
+                notifier.accept(before);
+            }
+
+            @Override
+            public void onFailure(PaymentRepository.Failure failure) {
+                update.onFailure(failure);
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                update.onError(exception);
             }
         };
     }
