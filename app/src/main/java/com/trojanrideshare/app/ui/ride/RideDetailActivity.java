@@ -6,15 +6,16 @@ import android.text.format.DateUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.OneShotPreDrawListener;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -38,6 +39,7 @@ import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
+import com.trojanrideshare.app.util.Motion;
 import com.trojanrideshare.app.util.RideSeats;
 import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
@@ -55,11 +57,14 @@ import java.util.List;
 public class RideDetailActivity extends AppCompatActivity {
     public static final String EXTRA_RIDE_ID = "rideId";
     public static final String EXTRA_CURRENT_USER_ID = "currentUserId";
+    /** The title the tapped card showed, so the shared title has text before the ride loads. */
+    public static final String EXTRA_RIDE_TITLE = "rideTitle";
 
-    private ProgressBar loadingIndicator;
+    private View loadingIndicator;
     private LinearLayout content;
+    private TextView detailTitle;
     private TextView infoMessage;
-    private Button joinButton;
+    private MaterialButton joinButton;
     private Button editRideButton;
     private Button completeRideButton;
     private Button leaveRideButton;
@@ -108,11 +113,12 @@ public class RideDetailActivity extends AppCompatActivity {
 
         loadingIndicator = findViewById(R.id.detailLoadingIndicator);
         content = findViewById(R.id.detailContent);
+        detailTitle = findViewById(R.id.detailTitle);
         infoMessage = findViewById(R.id.detailInfoMessage);
         joinButton = findViewById(R.id.joinButton);
         editRideButton = findViewById(R.id.editRideButton);
         MaterialToolbar toolbar = findViewById(R.id.rideDetailToolbar);
-        toolbar.setNavigationOnClickListener(v -> finish());
+        toolbar.setNavigationOnClickListener(v -> supportFinishAfterTransition());
         joinButton.setOnClickListener(v -> showJoinDialog());
         completeRideButton = findViewById(R.id.completeRideButton);
         editRideButton.setOnClickListener(v -> openEditRide());
@@ -141,11 +147,26 @@ public class RideDetailActivity extends AppCompatActivity {
                 });
 
         String rideId = getIntent().getStringExtra(EXTRA_RIDE_ID);
+        String sharedTitle = getIntent().getStringExtra(EXTRA_RIDE_TITLE);
+        if (sharedTitle != null) {
+            showTitle(sharedTitle);
+            detailTitle.setTransitionName(titleTransitionName(rideId));
+            supportPostponeEnterTransition();
+            OneShotPreDrawListener.add(detailTitle, this::supportStartPostponedEnterTransition);
+        }
         if (rideId == null || rideId.trim().isEmpty()) {
             showLoadError();
             return;
         }
         loadRide(rideId);
+    }
+
+    /**
+     * One name per ride, set on the tapped title only, so a list of rides never holds two views
+     * with the same name and Back finds the right card to return to.
+     */
+    public static String titleTransitionName(String rideId) {
+        return "ride_title_" + rideId;
     }
 
     private void loadRide(String rideId) {
@@ -174,8 +195,7 @@ public class RideDetailActivity extends AppCompatActivity {
         content.setVisibility(View.VISIBLE);
         infoMessage.setVisibility(View.GONE);
 
-        setText(R.id.detailTitle, emptyFallback(
-                ride.title, getString(R.string.search_untitled_ride)));
+        showTitle(emptyFallback(ride.title, getString(R.string.search_untitled_ride)));
         TextView status = findViewById(R.id.detailStatus);
         RideStatusChip.of(ride, Timestamp.now()).applyTo(status);
         status.setVisibility(View.VISIBLE);
@@ -299,7 +319,7 @@ public class RideDetailActivity extends AppCompatActivity {
         String spoken = label.equals(takenDescription)
                 ? takenDescription : takenDescription + ", " + label;
         return new RideTimelineView.Row(getString(R.string.ride_timeline_seats),
-                RideSeats.dots(taken, total) + "  " + label, spoken, state);
+                RideSeats.dotsText(this, taken, total).append("  ").append(label), spoken, state);
     }
 
     private String completedDetail(Ride ride, RideTimelineService.State state) {
@@ -526,6 +546,9 @@ public class RideDetailActivity extends AppCompatActivity {
         }
         joinButton.setVisibility(View.VISIBLE);
         joinButton.setEnabled(true);
+        joinButton.setActivated(false);
+        joinButton.setIcon(null);
+        joinButton.setText(R.string.join_request_action);
     }
 
     private void showJoinDialog() {
@@ -673,13 +696,13 @@ public class RideDetailActivity extends AppCompatActivity {
         joinRequestService.submit(ride, currentUserId, message, new JoinRequestService.Callback() {
             @Override
             public void onSuccess(JoinRequest request) {
-                joinButton.setVisibility(View.GONE);
+                showRequestPending();
                 showInfo(getString(R.string.join_request_success));
             }
 
             @Override
             public void onAlreadyRequested() {
-                joinButton.setVisibility(View.GONE);
+                showRequestPending();
                 showInfo(getString(R.string.join_request_duplicate));
             }
 
@@ -689,6 +712,14 @@ public class RideDetailActivity extends AppCompatActivity {
                 Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    /** The join button stays disabled and turns into a tonal "pending" label. */
+    private void showRequestPending() {
+        Motion.beginTransition(content);
+        joinButton.setActivated(true);
+        joinButton.setIconResource(R.drawable.ic_check);
+        joinButton.setText(R.string.join_request_pending);
     }
 
     private void openEditRide() {
@@ -749,8 +780,13 @@ public class RideDetailActivity extends AppCompatActivity {
     private void showLoadError() {
         loadingIndicator.setVisibility(View.GONE);
         content.setVisibility(View.VISIBLE);
-        setText(R.id.detailTitle, getString(R.string.ride_detail_title));
+        showTitle(getString(R.string.ride_detail_title));
         showInfo(getString(R.string.ride_detail_load_error));
+    }
+
+    private void showTitle(String title) {
+        detailTitle.setText(title);
+        detailTitle.setVisibility(View.VISIBLE);
     }
 
     private void setText(int viewId, String text) {

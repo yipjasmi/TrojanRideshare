@@ -49,6 +49,7 @@
     </com.google.android.material.appbar.MaterialToolbar>
 
     <ScrollView
+        android:id="@+id/homeScroll"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@id/homeToolbar"

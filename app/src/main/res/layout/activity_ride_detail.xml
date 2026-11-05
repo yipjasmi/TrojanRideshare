@@ -26,12 +26,20 @@
             android:orientation="vertical"
             android:padding="24dp">
 
-            <ProgressBar
-                android:id="@+id/detailLoadingIndicator"
-                android:layout_width="wrap_content"
+            <!-- Outside detailContent so the title shared from the tapped card shows while loading. -->
+            <TextView
+                android:id="@+id/detailTitle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="24dp" />
+                android:textAppearance="?attr/textAppearanceHeadlineSmall"
+                android:visibility="gone" />
+
+            <com.trojanrideshare.app.util.SkeletonView
+                android:id="@+id/detailLoadingIndicator"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:contentDescription="@string/loading" />
 
             <LinearLayout
                 android:id="@+id/detailContent"
@@ -39,12 +47,6 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
-
-                <TextView
-                    android:id="@+id/detailTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceHeadlineSmall" />
 
                 <TextView
                     android:id="@+id/detailStatus"
@@ -151,7 +153,10 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
                     android:text="@string/join_request_action"
-                    android:visibility="gone" />
+                    android:textColor="@color/join_button_content"
+                    android:visibility="gone"
+                    app:backgroundTint="@color/join_button_container"
+                    app:iconTint="@color/join_button_content" />
 
                 <Button
                     android:id="@+id/editRideButton"
