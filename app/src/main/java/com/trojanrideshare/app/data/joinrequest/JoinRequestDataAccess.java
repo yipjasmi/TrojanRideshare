@@ -1,9 +1,12 @@
 package com.trojanrideshare.app.data.joinrequest;
 
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
 import com.trojanrideshare.app.model.JoinRequest;
 import com.trojanrideshare.app.model.OrganizerJoinRequest;
 import com.trojanrideshare.app.model.Ride;
@@ -19,6 +22,7 @@ import java.util.Set;
 public class JoinRequestDataAccess implements JoinRequestRepository {
     private static final String RIDES_COLLECTION = "rides";
     private static final String REQUESTS_COLLECTION = "joinRequests";
+    private static final int MAX_WHERE_IN_VALUES = 30;
 
     private final FirebaseFirestore firestore;
 
@@ -146,16 +150,29 @@ public class JoinRequestDataAccess implements JoinRequestRepository {
             Map<String, Ride> ridesById,
             OrganizerRequestsCallback callback
     ) {
-        firestore.collection(REQUESTS_COLLECTION)
-                .whereEqualTo("status", JoinRequest.PENDING)
-                .get()
-                .addOnSuccessListener(requestSnapshot -> {
+        // Only this organizer's rides: reading every pending request in the app made each
+        // Requests badge cost grow with everyone's requests. Firestore caps whereIn at 30 values.
+        List<String> rideIds = new ArrayList<>(ridesById.keySet());
+        List<Task<QuerySnapshot>> queries = new ArrayList<>();
+        for (int start = 0; start < rideIds.size(); start += MAX_WHERE_IN_VALUES) {
+            queries.add(firestore.collection(REQUESTS_COLLECTION)
+                    .whereIn(
+                            "rideId",
+                            rideIds.subList(start, Math.min(start + MAX_WHERE_IN_VALUES, rideIds.size()))
+                    )
+                    .get());
+        }
+        Tasks.<QuerySnapshot>whenAllSuccess(queries)
+                .addOnSuccessListener(requestSnapshots -> {
                     List<OrganizerJoinRequest> results = new ArrayList<>();
-                    for (DocumentSnapshot document : requestSnapshot.getDocuments()) {
-                        JoinRequest request = document.toObject(JoinRequest.class);
-                        Ride ride = request == null ? null : ridesById.get(request.rideId);
-                        if (request != null && ride != null) {
-                            results.add(new OrganizerJoinRequest(request, ride));
+                    for (QuerySnapshot requestSnapshot : requestSnapshots) {
+                        for (DocumentSnapshot document : requestSnapshot.getDocuments()) {
+                            JoinRequest request = document.toObject(JoinRequest.class);
+                            Ride ride = request == null ? null : ridesById.get(request.rideId);
+                            if (request != null && ride != null
+                                    && JoinRequest.PENDING.equals(request.status)) {
+                                results.add(new OrganizerJoinRequest(request, ride));
+                            }
                         }
                     }
                     results.sort((left, right) -> {
