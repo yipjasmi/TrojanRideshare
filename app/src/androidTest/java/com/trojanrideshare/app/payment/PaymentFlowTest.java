@@ -363,10 +363,7 @@ public class PaymentFlowTest {
                     .check(matches(withText("Pay Ashley Lan $3.33 on Cash App")));
         }
 
-        // The rules don't check these fields, so a profile can hold anything.
-        emulator.signIn(emulator.organizer);
-        await(firestore().collection("users").document(emulator.organizer)
-                .update("venmoUsername", "evil.com/pay", "cashtag", "12345"));
+        emulator.plantHandles(emulator.organizer, "evil.com/pay", "12345");
         emulator.signIn(emulator.riderA);
 
         try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {

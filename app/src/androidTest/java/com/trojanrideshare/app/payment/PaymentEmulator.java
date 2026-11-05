@@ -252,6 +252,15 @@ final class PaymentEmulator {
         adminUpdate("rides/" + rideId, "\"title\":{\"nullValue\":null}", "\"title\"");
     }
 
+    // The rules now refuse handles the app can't link, but a profile saved before they were
+    // published can still hold one, so that case has to be planted as admin.
+    void plantHandles(String userId, String venmoUsername, String cashtag) throws Exception {
+        adminUpdate("users/" + userId,
+                "\"venmoUsername\":{\"stringValue\":\"" + venmoUsername + "\"},"
+                        + "\"cashtag\":{\"stringValue\":\"" + cashtag + "\"}",
+                "\"venmoUsername\",\"cashtag\"");
+    }
+
     private static String stringArray(List<String> values) {
         StringBuilder json = new StringBuilder("{\"arrayValue\":{\"values\":[");
         for (int i = 0; i < values.size(); i++) {
