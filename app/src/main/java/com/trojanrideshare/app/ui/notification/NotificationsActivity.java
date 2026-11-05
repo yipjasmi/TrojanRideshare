@@ -18,6 +18,7 @@ import com.trojanrideshare.app.MainActivity;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.notification.NotificationDataAccess;
 import com.trojanrideshare.app.model.Notification;
+import com.trojanrideshare.app.ui.payment.RidePaymentActivity;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
@@ -96,6 +97,9 @@ public class NotificationsActivity extends AppCompatActivity {
             messageView.setTypeface(null, notification.read ? Typeface.NORMAL : Typeface.BOLD);
             ((TextView) row.findViewById(R.id.notificationTime))
                     .setText(formatTime(notification.createdAt));
+            if (opensPayment(notification)) {
+                row.setOnClickListener(view -> openPayment(notification.rideId));
+            }
             container.addView(row);
 
             if (!notification.read && notification.id != null) {
@@ -113,6 +117,22 @@ public class NotificationsActivity extends AppCompatActivity {
             @Override
             public void onError(Exception exception) {}
         });
+    }
+
+    // Any student can write a notification, and Firestore throws on a bad document id.
+    private static boolean opensPayment(Notification notification) {
+        return notification.rideId != null
+                && !notification.rideId.isEmpty()
+                && !notification.rideId.contains("/")
+                && (Notification.TYPE_SHARE_ASSIGNED.equals(notification.type)
+                        || Notification.TYPE_SHARE_PAID.equals(notification.type)
+                        || Notification.TYPE_SHARE_FLAGGED.equals(notification.type));
+    }
+
+    private void openPayment(String rideId) {
+        Intent intent = new Intent(this, RidePaymentActivity.class);
+        intent.putExtra(RidePaymentActivity.EXTRA_RIDE_ID, rideId);
+        startActivity(intent);
     }
 
     private void showMessage(String text) {

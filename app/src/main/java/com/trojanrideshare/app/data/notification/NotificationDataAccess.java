@@ -1,17 +1,14 @@
 package com.trojanrideshare.app.data.notification;
 
+import android.util.Log;
+
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.model.Notification;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class NotificationDataAccess {
-    public interface WriteCallback {
-        void onSuccess();
-        void onError(Exception exception);
-    }
-
+public class NotificationDataAccess implements NotificationRepository {
     public interface ListCallback {
         void onSuccess(List<Notification> notifications);
         void onError(Exception exception);
@@ -28,11 +25,15 @@ public class NotificationDataAccess {
         this.firestore = firestore;
     }
 
+    @Override
     public void create(Notification notification, WriteCallback callback) {
         firestore.collection(NOTIFICATIONS_COLLECTION)
                 .add(notification)
                 .addOnSuccessListener(reference -> callback.onSuccess())
-                .addOnFailureListener(callback::onError);
+                .addOnFailureListener(exception -> {
+                    Log.w("Notifications", "Could not send a " + notification.type, exception);
+                    callback.onError(exception);
+                });
     }
 
     /** All notifications for the user. Ordering is left to the caller to avoid a composite index. */
