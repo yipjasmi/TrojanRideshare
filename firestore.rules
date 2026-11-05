@@ -20,16 +20,31 @@ service cloud.firestore {
     // Profiles are readable by any student (public profile view). Only the owner writes, and
     // email, USC ID, full name and graduation year are fixed after signup.
     match /users/{userId} {
+      // Riders' pay links are built from these, so only the shapes the app accepts are stored
+      // (same patterns as PaymentValidator). A non-string would also crash profile screens.
+      function hasValidPaymentHandles() {
+        let data = request.resource.data;
+        return (!('venmoUsername' in data)
+                || (data.venmoUsername is string
+                    && data.venmoUsername.matches('[A-Za-z0-9_-]{5,30}')))
+          && (!('cashtag' in data)
+                || (data.cashtag is string
+                    && data.cashtag.matches('[A-Za-z0-9_]{1,20}')
+                    && data.cashtag.matches('.*[A-Za-z].*')));
+      }
+
       allow read: if isUscStudent();
       allow create: if isUscStudent()
         && userId == uid()
         && request.resource.data.email.lower() == request.auth.token.email.lower()
         && request.resource.data.uscId is string
-        && request.resource.data.uscId.matches('[0-9]{10}');
+        && request.resource.data.uscId.matches('[0-9]{10}')
+        && hasValidPaymentHandles();
       allow update: if isUscStudent()
         && userId == uid()
         && !request.resource.data.diff(resource.data).affectedKeys()
-               .hasAny(['email', 'uscId', 'fullName', 'gradYear', 'createdAt']);
+               .hasAny(['email', 'uscId', 'fullName', 'gradYear', 'createdAt'])
+        && hasValidPaymentHandles();
       allow delete: if false;
     }
 

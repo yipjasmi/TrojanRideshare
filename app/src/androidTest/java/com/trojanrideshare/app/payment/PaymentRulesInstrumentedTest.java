@@ -274,6 +274,17 @@ public class PaymentRulesInstrumentedTest {
     }
 
     @Test
+    public void rules_refusePaymentHandlesTheAppWouldNotLink() throws Exception {
+        emulator.signIn(emulator.organizer);
+
+        assertDenied(PaymentEmulator.saveHandles(emulator.organizer, "evil.com/pay", null));
+        assertDenied(PaymentEmulator.saveHandles(emulator.organizer, null, "12345"));
+        assertDenied(firestore().collection("users").document(emulator.organizer)
+                .update("venmoUsername", 12345));
+        await(PaymentEmulator.saveHandles(emulator.organizer, "ashley-lan", "AshleyLan"));
+    }
+
+    @Test
     public void markPaid_onlyWorksForTheRidersOwnShare() throws Exception {
         String rideId = splitRide();
 
