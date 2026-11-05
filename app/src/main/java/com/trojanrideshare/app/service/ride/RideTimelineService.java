@@ -92,14 +92,16 @@ public final class RideTimelineService {
      */
     public static PaymentProgress paymentProgress(Ride ride, String userId, List<Payment> shares) {
         if (userId.equals(ride.organizerId)) {
+            // Counted from the ride's riders, so a rider with no share yet isn't treated as paid.
             int riders = 0;
             int paid = 0;
-            for (Payment share : shares) {
-                if (Objects.equals(share.userId, ride.organizerId)) {
+            for (String riderId : ride.getAllParticipantIds()) {
+                if (Objects.equals(riderId, ride.organizerId)) {
                     continue;
                 }
                 riders++;
-                if (share.paid) {
+                Payment share = shareOf(shares, riderId);
+                if (share != null && share.paid) {
                     paid++;
                 }
             }
@@ -121,7 +123,8 @@ public final class RideTimelineService {
     /** The rule worth knowing before tapping an action. Nothing once the ride has left or ended. */
     public static Hint hint(Ride ride, String userId, Timestamp now) {
         boolean signedIn = userId != null && !userId.trim().isEmpty();
-        if (!signedIn || !ride.isActive() || ride.hasDeparted(now)) {
+        // The rides rules don't require a departure time, so a ride can arrive without one.
+        if (!signedIn || ride.departureTime == null || !ride.isActive() || ride.hasDeparted(now)) {
             return Hint.NONE;
         }
         if (userId.equals(ride.organizerId)) {
@@ -150,6 +153,7 @@ public final class RideTimelineService {
     /** The original time is kept from the first delay, so it only differs once a delay moved it. */
     public static boolean wasDelayed(Ride ride) {
         return ride.originalDepartureTime != null
+                && ride.departureTime != null
                 && !ride.originalDepartureTime.equals(ride.departureTime);
     }
 

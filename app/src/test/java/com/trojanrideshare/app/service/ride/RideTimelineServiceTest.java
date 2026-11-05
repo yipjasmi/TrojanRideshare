@@ -135,6 +135,37 @@ public class RideTimelineServiceTest {
     }
 
     @Test
+    public void paymentProgress_organizerCountsARiderWithNoShareAsUnpaid() {
+        Ride ride = costRecorded();
+        ride.participantIds = new ArrayList<>(Arrays.asList("org", "rider", "second"));
+        List<Payment> shares = Arrays.asList(share("org", true), share("rider", true));
+
+        PaymentProgress progress = RideTimelineService.paymentProgress(ride, "org", shares);
+
+        assertEquals(1, progress.paid);
+        assertEquals(2, progress.total);
+        assertFalse(progress.allPaid());
+    }
+
+    @Test
+    public void hint_givesNoneForARideWithNoDepartureTime() {
+        Ride ride = ride(Ride.STATUS_ON_TIME, 10 * HOUR);
+        ride.departureTime = null;
+
+        assertEquals(Hint.NONE, RideTimelineService.hint(ride, "rider", NOW));
+        assertEquals(Hint.NONE, RideTimelineService.hint(ride, "stranger", NOW));
+    }
+
+    @Test
+    public void wasDelayed_needsADepartureTimeToCompareWith() {
+        Ride ride = ride(Ride.STATUS_DELAYED, 10 * HOUR);
+        ride.originalDepartureTime = at(5 * HOUR);
+        ride.departureTime = null;
+
+        assertFalse(RideTimelineService.wasDelayed(ride));
+    }
+
+    @Test
     public void paymentProgress_organizerWithNoRidersHasNothingLeftToCollect() {
         Ride ride = costRecorded();
         ride.participantIds = new ArrayList<>(Collections.singletonList("org"));
