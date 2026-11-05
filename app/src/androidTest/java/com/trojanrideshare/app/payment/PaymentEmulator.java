@@ -144,6 +144,12 @@ final class PaymentEmulator {
         return done.getTask();
     }
 
+    static Task<Void> saveHandles(String userId, String venmoUsername, String cashtag) {
+        TaskCompletionSource<Void> done = new TaskCompletionSource<>();
+        new PaymentDataAccess().saveHandles(userId, venmoUsername, cashtag, completing(done));
+        return done.getTask();
+    }
+
     private static PaymentRepository.UpdateCallback completing(TaskCompletionSource<Void> done) {
         return new PaymentRepository.UpdateCallback() {
             @Override

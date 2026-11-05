@@ -150,6 +150,26 @@
     <string name="payment_flag_name">Flag %1$s</string>
     <string name="payment_flag_title">Flag %1$s?</string>
     <string name="payment_flag_body">They have not marked their %1$s share paid after %2$d days. They will see this flag on their share until they pay.</string>
+    <string name="payment_app_venmo">Venmo</string>
+    <string name="payment_app_cash_app">Cash App</string>
+    <string name="payment_pay_venmo">Pay %1$s %2$s on Venmo</string>
+    <string name="payment_pay_cash_app">Pay %1$s %2$s on Cash App</string>
+    <string name="payment_paid_hint">Paid on %1$s? Tap Mark as paid.</string>
+    <string name="payment_app_missing">Nothing on this phone can open %1$s.</string>
+    <string name="payment_request_venmo">Request on Venmo</string>
+    <string name="payment_request_venmo_name">Request %1$s from %2$s on Venmo</string>
+    <string name="payment_apps_title">Payment apps</string>
+    <string name="payment_apps_visibility">Other students can see these so riders can pay you.</string>
+    <string name="payment_apps_empty">Add Venmo or Cash App so riders can pay you</string>
+    <string name="payment_apps_venmo">Venmo @%1$s</string>
+    <string name="payment_apps_cash_app">Cash App $%1$s</string>
+    <string name="payment_apps_both">%1$s · %2$s</string>
+    <string name="payment_apps_venmo_hint">Venmo username</string>
+    <string name="payment_apps_cashtag_hint">Cashtag</string>
+    <string name="payment_apps_venmo_prefix" translatable="false">\@</string>
+    <string name="payment_apps_cashtag_prefix" translatable="false">$</string>
+    <string name="payment_apps_save">Save</string>
+    <string name="payment_apps_saved">Payment apps saved</string>
     <string-array name="search_sort_options">
         <item>Earliest departure</item>
         <item>Latest departure</item>
