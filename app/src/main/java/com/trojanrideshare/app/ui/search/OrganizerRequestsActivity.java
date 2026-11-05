@@ -30,6 +30,7 @@ import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.Haptics;
 import com.trojanrideshare.app.util.InitialsAvatarView;
 import com.trojanrideshare.app.util.PullToRefresh;
 import com.trojanrideshare.app.util.SystemBarsHelper;
@@ -251,6 +252,9 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
                 new JoinRequestService.DecisionCallback() {
                     @Override
                     public void onSuccess() {
+                        // setLoading(true) already removed the tapped row, and a detached view
+                        // gives no haptic feedback, so these go on the list that held it.
+                        Haptics.confirm(requestsContainer);
                         Toast.makeText(
                                 OrganizerRequestsActivity.this,
                                 accepting
@@ -263,6 +267,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                     @Override
                     public void onUnavailable(String message) {
+                        Haptics.reject(requestsContainer);
                         Toast.makeText(
                                 OrganizerRequestsActivity.this,
                                 message,
@@ -273,6 +278,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                     @Override
                     public void onError(String message) {
+                        Haptics.reject(requestsContainer);
                         setLoading(false);
                         Toast.makeText(
                                 OrganizerRequestsActivity.this,
@@ -353,7 +359,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
             Button cancelButton = view.findViewById(R.id.organizerRequestReject);
             if (JoinRequest.PENDING.equals(item.request.status)) {
                 cancelButton.setText(R.string.join_request_cancel_action);
-                cancelButton.setOnClickListener(unused -> confirmCancelMine(item, title));
+                cancelButton.setOnClickListener(tapped -> confirmCancelMine(item, title, tapped));
             } else {
                 cancelButton.setVisibility(View.GONE);
             }
@@ -362,7 +368,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         }
     }
 
-    private void confirmCancelMine(OrganizerJoinRequest item, String title) {
+    private void confirmCancelMine(OrganizerJoinRequest item, String title, View cancelButton) {
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.join_request_cancel_title)
                 .setMessage(getString(R.string.join_request_cancel_message, title))
@@ -372,6 +378,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
                                 new JoinRequestService.CancelCallback() {
                                     @Override
                                     public void onSuccess() {
+                                        Haptics.confirm(cancelButton);
                                         Toast.makeText(OrganizerRequestsActivity.this,
                                                 R.string.join_request_cancelled, Toast.LENGTH_LONG).show();
                                         loadMyRequests();
@@ -379,6 +386,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                                     @Override
                                     public void onNotPending() {
+                                        Haptics.reject(cancelButton);
                                         Toast.makeText(OrganizerRequestsActivity.this,
                                                 R.string.join_request_not_pending, Toast.LENGTH_LONG).show();
                                         loadMyRequests();
@@ -386,6 +394,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
                                     @Override
                                     public void onError(String message) {
+                                        Haptics.reject(cancelButton);
                                         Toast.makeText(OrganizerRequestsActivity.this, message,
                                                 Toast.LENGTH_LONG).show();
                                     }

@@ -44,6 +44,7 @@ import com.trojanrideshare.app.service.search.SearchService;
 import com.trojanrideshare.app.ui.ride.CreateRideActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.Haptics;
 import com.trojanrideshare.app.util.Money;
 import com.trojanrideshare.app.util.Motion;
 import com.trojanrideshare.app.util.RideSeats;
@@ -645,6 +646,7 @@ public class SearchActivity extends AppCompatActivity {
                 new JoinRequestService.Callback() {
                     @Override
                     public void onSuccess(com.trojanrideshare.app.model.JoinRequest request) {
+                        Haptics.confirm(requestButton);
                         requestedRideIds.add(ride.id);
                         Motion.beginTransition(resultsContainer);
                         showPendingState(ride, requestButton, requestStatus);
@@ -657,6 +659,7 @@ public class SearchActivity extends AppCompatActivity {
 
                     @Override
                     public void onAlreadyRequested() {
+                        Haptics.reject(requestButton);
                         requestedRideIds.add(ride.id);
                         Motion.beginTransition(resultsContainer);
                         showPendingState(ride, requestButton, requestStatus);
@@ -669,6 +672,7 @@ public class SearchActivity extends AppCompatActivity {
 
                     @Override
                     public void onError(String message) {
+                        Haptics.reject(requestButton);
                         requestButton.setEnabled(true);
                         requestButton.setText(R.string.join_request_action);
                         Toast.makeText(SearchActivity.this, message, Toast.LENGTH_LONG).show();
@@ -738,6 +742,7 @@ public class SearchActivity extends AppCompatActivity {
                 new JoinRequestService.CancelCallback() {
                     @Override
                     public void onSuccess() {
+                        Haptics.confirm(requestButton);
                         requestedRideIds.remove(ride.id);
                         showAvailableState(ride, requestButton, requestStatus);
                         Toast.makeText(
@@ -749,6 +754,7 @@ public class SearchActivity extends AppCompatActivity {
 
                     @Override
                     public void onNotPending() {
+                        Haptics.reject(requestButton);
                         requestedRideIds.remove(ride.id);
                         Toast.makeText(
                                 SearchActivity.this,
@@ -760,6 +766,7 @@ public class SearchActivity extends AppCompatActivity {
 
                     @Override
                     public void onError(String message) {
+                        Haptics.reject(requestButton);
                         showPendingState(ride, requestButton, requestStatus);
                         Toast.makeText(SearchActivity.this, message, Toast.LENGTH_LONG).show();
                     }

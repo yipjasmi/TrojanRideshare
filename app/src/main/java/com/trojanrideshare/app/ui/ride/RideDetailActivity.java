@@ -39,6 +39,7 @@ import com.trojanrideshare.app.service.ride.RideTimelineService;
 import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.Haptics;
 import com.trojanrideshare.app.util.InitialsAvatarView;
 import com.trojanrideshare.app.util.Money;
 import com.trojanrideshare.app.util.Motion;
@@ -586,6 +587,7 @@ public class RideDetailActivity extends AppCompatActivity {
         editRideService.cancelRide(ride, currentUserId, new EditRideService.Callback() {
             @Override
             public void onSuccess() {
+                Haptics.confirm(cancelRideButton);
                 cancelRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, "Ride cancelled.", Toast.LENGTH_LONG).show();
                 loadRide(ride.id);
@@ -593,12 +595,14 @@ public class RideDetailActivity extends AppCompatActivity {
 
             @Override
             public void onDenied(String reason) {
+                Haptics.reject(cancelRideButton);
                 cancelRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, reason, Toast.LENGTH_LONG).show();
             }
 
             @Override
             public void onError(String message) {
+                Haptics.reject(cancelRideButton);
                 cancelRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
             }
@@ -611,6 +615,7 @@ public class RideDetailActivity extends AppCompatActivity {
         }
         String error = LeaveRideService.leaveError(ride, currentUserId, Timestamp.now());
         if (error != null) {
+            Haptics.reject(leaveRideButton);
             new MaterialAlertDialogBuilder(this)
                     .setTitle("Can't leave this ride")
                     .setMessage(error)
@@ -665,6 +670,7 @@ public class RideDetailActivity extends AppCompatActivity {
         leaveRideService.leave(ride, currentUserId, new LeaveRideService.Callback() {
             @Override
             public void onSuccess(LeaveRideService.Plan plan) {
+                Haptics.confirm(leaveRideButton);
                 leaveRideButton.setEnabled(true);
                 String done = plan.outcome == LeaveRideService.Outcome.RIDE_CANCELLED
                         ? "You left, and the ride was cancelled."
@@ -677,6 +683,7 @@ public class RideDetailActivity extends AppCompatActivity {
 
             @Override
             public void onDenied(String reason) {
+                Haptics.reject(leaveRideButton);
                 leaveRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, reason, Toast.LENGTH_LONG).show();
                 loadRide(ride.id);
@@ -684,6 +691,7 @@ public class RideDetailActivity extends AppCompatActivity {
 
             @Override
             public void onError(String message) {
+                Haptics.reject(leaveRideButton);
                 leaveRideButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
             }
@@ -695,18 +703,21 @@ public class RideDetailActivity extends AppCompatActivity {
         joinRequestService.submit(ride, currentUserId, message, new JoinRequestService.Callback() {
             @Override
             public void onSuccess(JoinRequest request) {
+                Haptics.confirm(joinButton);
                 showRequestPending();
                 showInfo(getString(R.string.join_request_success));
             }
 
             @Override
             public void onAlreadyRequested() {
+                Haptics.reject(joinButton);
                 showRequestPending();
                 showInfo(getString(R.string.join_request_duplicate));
             }
 
             @Override
             public void onError(String message) {
+                Haptics.reject(joinButton);
                 joinButton.setEnabled(true);
                 Toast.makeText(RideDetailActivity.this, message, Toast.LENGTH_LONG).show();
             }
