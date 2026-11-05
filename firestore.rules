@@ -79,7 +79,7 @@ service cloud.firestore {
 
       // Leaving needs at least three hours before the current (possibly delayed) departure.
       function isBeforeLeaveCutoff() {
-        return resource.data.departureTime > request.time + duration.value(3, 'h');
+        return resource.data.departureTime >= request.time + duration.value(3, 'h');
       }
 
       // The caller removes only themselves from the rider list.
