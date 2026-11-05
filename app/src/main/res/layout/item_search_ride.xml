@@ -67,16 +67,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical"
             android:text="@string/join_request_pending"
             android:textAppearance="?attr/textAppearanceLabelLarge"
             android:textColor="?attr/colorPrimary"
-            android:visibility="gone" />
+            android:visibility="gone"
+            app:drawableStartCompat="@drawable/ic_check"
+            app:drawableTint="?attr/colorPrimary" />
 
         <Button
             android:id="@+id/joinRequestButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="@string/join_request_action" />
+            android:text="@string/join_request_action"
+            android:textColor="@color/join_button_content"
+            app:backgroundTint="@color/join_button_container"
+            app:iconTint="@color/join_button_content" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

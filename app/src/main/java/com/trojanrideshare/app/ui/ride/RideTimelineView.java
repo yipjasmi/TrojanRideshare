@@ -4,7 +4,6 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.provider.Settings;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,6 +16,7 @@ import androidx.core.view.ViewCompat;
 import com.google.android.material.color.MaterialColors;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.service.ride.RideTimelineService;
+import com.trojanrideshare.app.util.Motion;
 
 import java.util.List;
 
@@ -133,9 +133,7 @@ public class RideTimelineView extends LinearLayout {
     }
 
     private void animateFill() {
-        boolean animationsOff = Settings.Global.getFloat(getContext().getContentResolver(),
-                Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f;
-        if (animationsOff) {
+        if (Motion.isReduced(getContext())) {
             return;
         }
         fillFraction = 0f;

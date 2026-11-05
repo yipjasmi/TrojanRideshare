@@ -1,7 +1,6 @@
 package com.trojanrideshare.app.ui.payment;
 
 import android.content.Context;
-import android.provider.Settings;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
 
@@ -15,6 +14,7 @@ import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.model.Ride;
+import com.trojanrideshare.app.util.Motion;
 
 import java.text.DateFormat;
 import java.util.List;
@@ -94,7 +94,7 @@ final class PaymentUi {
 
     static void showPaidCheck(View check, boolean animate) {
         check.setVisibility(View.VISIBLE);
-        if (!animate || animationsOff(check.getContext())) {
+        if (!animate || Motion.isReduced(check.getContext())) {
             return;
         }
         check.setAlpha(0f);
@@ -107,14 +107,6 @@ final class PaymentUi {
                 .setDuration(PAID_CHECK_MILLIS)
                 .setInterpolator(new OvershootInterpolator())
                 .start();
-    }
-
-    private static boolean animationsOff(Context context) {
-        return Settings.Global.getFloat(
-                context.getContentResolver(),
-                Settings.Global.ANIMATOR_DURATION_SCALE,
-                1f
-        ) == 0f;
     }
 
     static String shareStatus(Context context, Payment share) {

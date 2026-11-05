@@ -10,6 +10,7 @@ import android.widget.TextView;
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -29,6 +30,7 @@ import com.trojanrideshare.app.ui.search.SearchActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.DepartureCountdown;
 import com.trojanrideshare.app.util.Money;
+import com.trojanrideshare.app.util.Motion;
 import com.trojanrideshare.app.util.RideSeats;
 import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
@@ -55,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
             state.findViewById(R.id.sectionRetry).setOnClickListener(view -> load.run());
         }
 
-        /** Only the first load spins; a refresh keeps the last result up until it lands. */
+        /** Only the first load shows the skeleton; a refresh keeps the last result up until it lands. */
         void showLoading() {
             if (loaded) {
                 return;
@@ -159,9 +161,10 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        View createFab = findViewById(R.id.createRideFab);
+        ExtendedFloatingActionButton createFab = findViewById(R.id.createRideFab);
         if (createFab != null) {
             createFab.setOnClickListener(v -> openCreateRide());
+            Motion.shrinkOnScroll(findViewById(R.id.homeScroll), createFab);
         }
 
         findViewById(R.id.moneyCard).setOnClickListener(
@@ -377,8 +380,10 @@ public class MainActivity extends AppCompatActivity {
     private void openRide(Ride ride) {
         Intent rideIntent = new Intent(this, RideDetailActivity.class);
         rideIntent.putExtra(RideDetailActivity.EXTRA_RIDE_ID, ride.id);
+        rideIntent.putExtra(RideDetailActivity.EXTRA_RIDE_TITLE, nextRideTitle.getText().toString());
         rideIntent.putExtra(RideDetailActivity.EXTRA_CURRENT_USER_ID, currentUserId());
-        startActivity(rideIntent);
+        startActivity(rideIntent, Motion.sharedElementOptions(
+                this, nextRideTitle, RideDetailActivity.titleTransitionName(ride.id)));
     }
 
     private String currentUserId() {

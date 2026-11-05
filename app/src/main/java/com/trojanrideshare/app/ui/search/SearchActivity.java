@@ -11,7 +11,6 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,6 +28,7 @@ import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.AutocompleteActivity;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
@@ -45,6 +45,7 @@ import com.trojanrideshare.app.ui.ride.CreateRideActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
+import com.trojanrideshare.app.util.Motion;
 import com.trojanrideshare.app.util.RideSeats;
 import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
@@ -81,7 +82,7 @@ public class SearchActivity extends AppCompatActivity {
     private Spinner sortSpinner;
     private CheckBox statusOnTimeCheckBox;
     private CheckBox statusDelayedCheckBox;
-    private ProgressBar loadingIndicator;
+    private View loadingIndicator;
     private TextView resultMessage;
     private LinearLayout resultsContainer;
     private SearchService searchService;
@@ -126,8 +127,9 @@ public class SearchActivity extends AppCompatActivity {
         initializePlaces();
         updateTimeButtons();
 
-        View createFab = findViewById(R.id.createRideFab);
+        ExtendedFloatingActionButton createFab = findViewById(R.id.createRideFab);
         if (createFab != null) {
+            Motion.shrinkOnScroll(findViewById(R.id.searchScroll), createFab);
             createFab.setOnClickListener(v -> {
                 Intent createIntent = new Intent(SearchActivity.this, CreateRideActivity.class);
                 String currentUserId = getCurrentUserId();
@@ -533,10 +535,9 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     private void bindRide(View item, Ride ride) {
-        item.setOnClickListener(view -> openRideDetail(ride));
-        ((TextView) item.findViewById(R.id.rideTitle)).setText(
-                emptyFallback(ride.title, getString(R.string.search_untitled_ride))
-        );
+        TextView title = item.findViewById(R.id.rideTitle);
+        item.setOnClickListener(view -> openRideDetail(ride, title));
+        title.setText(emptyFallback(ride.title, getString(R.string.search_untitled_ride)));
         TextView status = item.findViewById(R.id.rideStatus);
         RideStatusChip.of(ride, Timestamp.now()).applyTo(status);
         ((TextView) item.findViewById(R.id.rideRoute)).setText(getString(
@@ -586,13 +587,15 @@ public class SearchActivity extends AppCompatActivity {
         }
     }
 
-    private void openRideDetail(Ride ride) {
+    private void openRideDetail(Ride ride, TextView title) {
         Intent intent = new Intent(this, RideDetailActivity.class);
         intent.putExtra(RideDetailActivity.EXTRA_RIDE_ID, ride.id);
+        intent.putExtra(RideDetailActivity.EXTRA_RIDE_TITLE, title.getText().toString());
         intent.putExtra(
                 RideDetailActivity.EXTRA_CURRENT_USER_ID,
                 getIntent().getStringExtra(EXTRA_CURRENT_USER_ID));
-        startActivity(intent);
+        startActivity(intent, Motion.sharedElementOptions(
+                this, title, RideDetailActivity.titleTransitionName(ride.id)));
     }
 
     private void showJoinRequestDialog(
@@ -643,6 +646,7 @@ public class SearchActivity extends AppCompatActivity {
                     @Override
                     public void onSuccess(com.trojanrideshare.app.model.JoinRequest request) {
                         requestedRideIds.add(ride.id);
+                        Motion.beginTransition(resultsContainer);
                         showPendingState(ride, requestButton, requestStatus);
                         Toast.makeText(
                                 SearchActivity.this,
@@ -654,6 +658,7 @@ public class SearchActivity extends AppCompatActivity {
                     @Override
                     public void onAlreadyRequested() {
                         requestedRideIds.add(ride.id);
+                        Motion.beginTransition(resultsContainer);
                         showPendingState(ride, requestButton, requestStatus);
                         Toast.makeText(
                                 SearchActivity.this,
@@ -764,6 +769,7 @@ public class SearchActivity extends AppCompatActivity {
 
     private void showPendingState(Ride ride, Button button, TextView status) {
         button.setEnabled(true);
+        button.setActivated(true);
         button.setText(R.string.join_request_cancel_action);
         button.setOnClickListener(
                 view -> showCancelRequestDialog(ride, button, status)
@@ -773,6 +779,7 @@ public class SearchActivity extends AppCompatActivity {
 
     private void showAvailableState(Ride ride, Button button, TextView status) {
         button.setEnabled(true);
+        button.setActivated(false);
         button.setText(R.string.join_request_action);
         button.setOnClickListener(
                 view -> showJoinRequestDialog(ride, button, status)
