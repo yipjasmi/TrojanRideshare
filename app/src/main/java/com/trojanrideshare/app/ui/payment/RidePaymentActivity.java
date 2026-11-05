@@ -24,6 +24,9 @@ import com.trojanrideshare.app.model.PaymentHandles;
 import com.trojanrideshare.app.model.RidePaymentDetails;
 import com.trojanrideshare.app.service.payment.PaymentLinks;
 import com.trojanrideshare.app.service.payment.PaymentService;
+import com.trojanrideshare.app.service.validation.PaymentValidator;
+import com.trojanrideshare.app.ui.profile.ProfileActivity;
+import com.trojanrideshare.app.util.Haptics;
 import com.trojanrideshare.app.util.Money;
 
 import java.util.HashSet;
@@ -57,6 +60,7 @@ public class RidePaymentActivity extends AppCompatActivity {
     private Button payCashAppButton;
     private TextView paidHint;
     private Button primaryAction;
+    private View paymentAppsNudge;
     private TextView sharesTitle;
     private LinearLayout sharesList;
     private TextView footnote;
@@ -84,6 +88,7 @@ public class RidePaymentActivity extends AppCompatActivity {
         payCashAppButton = findViewById(R.id.payCashAppButton);
         paidHint = findViewById(R.id.paidHint);
         primaryAction = findViewById(R.id.primaryAction);
+        paymentAppsNudge = findViewById(R.id.paymentAppsNudge);
         sharesTitle = findViewById(R.id.sharesTitle);
         sharesList = findViewById(R.id.sharesList);
         footnote = findViewById(R.id.footnote);
@@ -92,6 +97,9 @@ public class RidePaymentActivity extends AppCompatActivity {
         }
 
         stateRetry.setOnClickListener(view -> load());
+        findViewById(R.id.paymentAppsNudgeAction).setOnClickListener(
+                view -> startActivity(new Intent(this, ProfileActivity.class))
+        );
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         rideId = getIntent().getStringExtra(EXTRA_RIDE_ID);
         if (user == null || rideId == null) {
@@ -230,6 +238,7 @@ public class RidePaymentActivity extends AppCompatActivity {
 
     private void renderOrganizer(List<Payment> shares) {
         showDetail();
+        paymentAppsNudge.setVisibility(hasPaymentApp(currentUserId) ? View.GONE : View.VISIBLE);
         footnote.setText(R.string.payment_outside_app);
         statusText.setVisibility(View.GONE);
         sharesList.removeAllViews();
@@ -415,6 +424,12 @@ public class RidePaymentActivity extends AppCompatActivity {
         return handles != null ? handles : new PaymentHandles(null, null);
     }
 
+    private boolean hasPaymentApp(String userId) {
+        PaymentHandles handles = handlesOf(userId);
+        return PaymentValidator.venmoUsername(handles.venmoUsername).handle != null
+                || PaymentValidator.cashtag(handles.cashtag).handle != null;
+    }
+
     // True once, when a share this screen showed as unpaid comes back paid.
     private boolean justPaid(Payment share) {
         if (!share.paid) {
@@ -472,6 +487,7 @@ public class RidePaymentActivity extends AppCompatActivity {
             @Override
             public void onSuccess() {
                 primaryAction.setEnabled(true);
+                Haptics.confirm(detailScroll);
             }
 
             @Override
@@ -479,6 +495,7 @@ public class RidePaymentActivity extends AppCompatActivity {
                 primaryAction.setEnabled(true);
                 actionError.setText(message);
                 actionError.setVisibility(View.VISIBLE);
+                Haptics.reject(detailScroll);
             }
         };
     }
