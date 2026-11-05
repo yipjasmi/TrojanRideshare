@@ -96,6 +96,10 @@ public class MainActivity extends AppCompatActivity {
     private Section nextRideSection;
     private Section moneySection;
     private Section requestsSection;
+    private int nextRideGeneration;
+    private int balanceGeneration;
+    private int requestsGeneration;
+    private int notificationsGeneration;
     private Ride nextRide;
 
     private View nextRideCard;
@@ -213,17 +217,29 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
+    /**
+     * Each section counts its loads, and a response only lands if no newer load of that section
+     * started since (a resume or a retry) and the screen is still open. Otherwise a slow older
+     * response could overwrite a newer one.
+     */
+    private boolean isStale(int generation, int currentGeneration) {
+        return generation != currentGeneration || isFinishing() || isDestroyed();
+    }
+
     private void loadNextRide() {
+        int generation = ++nextRideGeneration;
         nextRideSection.showLoading();
         homeService.loadNextRide(currentUserId(), new HomeService.NextRideCallback() {
             @Override
             public void onSuccess(Ride ride) {
+                if (isStale(generation, nextRideGeneration)) return;
                 bindNextRide(ride);
                 nextRideSection.showContent();
             }
 
             @Override
             public void onError(String message) {
+                if (isStale(generation, nextRideGeneration)) return;
                 bindNextRide(null);
                 nextRideSection.showError();
             }
@@ -268,10 +284,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadBalance() {
+        int generation = ++balanceGeneration;
         moneySection.showLoading();
         homeService.loadBalance(currentUserId(), new HomeService.BalanceCallback() {
             @Override
             public void onSuccess(HomeService.Balance balance) {
+                if (isStale(generation, balanceGeneration)) return;
                 youOweText.setText(Money.format(balance.youOweCents));
                 owedToYouText.setText(Money.format(balance.owedToYouCents));
                 settledText.setVisibility(balance.isSettled() ? View.VISIBLE : View.GONE);
@@ -280,18 +298,21 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onError(String message) {
+                if (isStale(generation, balanceGeneration)) return;
                 moneySection.showError();
             }
         });
     }
 
     private void loadRequests() {
+        int generation = ++requestsGeneration;
         requestsSection.showLoading();
         joinRequestService.loadOrganizerRequests(
                 currentUserId(),
                 new JoinRequestService.OrganizerRequestsCallback() {
                     @Override
                     public void onSuccess(List<OrganizerJoinRequest> requests) {
+                        if (isStale(generation, requestsGeneration)) return;
                         int waiting = requests.size();
                         requestsWaitingText.setText(waiting == 0
                                 ? getString(R.string.main_no_requests_waiting)
@@ -301,9 +322,10 @@ public class MainActivity extends AppCompatActivity {
                         requestsSection.showContent();
                     }
 
+                    // A failed count keeps the badge as it was rather than claiming zero.
                     @Override
                     public void onError(String message) {
-                        BottomNavHelper.showRequestsBadge(MainActivity.this, 0);
+                        if (isStale(generation, requestsGeneration)) return;
                         requestsSection.showError();
                     }
                 }
@@ -311,15 +333,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadUnreadNotifications() {
+        int generation = ++notificationsGeneration;
         homeService.loadUnreadNotificationCount(currentUserId(), new HomeService.CountCallback() {
             @Override
             public void onSuccess(int unread) {
+                if (isStale(generation, notificationsGeneration)) return;
                 bindNotificationBadge(unread);
             }
 
             @Override
             public void onError(String message) {
-                bindNotificationBadge(0);
+                // Keep the badge as it was rather than claiming zero.
             }
         });
     }
