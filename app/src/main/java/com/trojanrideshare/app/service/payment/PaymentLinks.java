@@ -1,6 +1,7 @@
 package com.trojanrideshare.app.service.payment;
 
 import com.trojanrideshare.app.service.validation.PaymentValidator;
+import com.trojanrideshare.app.util.DisplayText;
 import com.trojanrideshare.app.util.Money;
 
 import java.io.UnsupportedEncodingException;
@@ -48,28 +49,8 @@ public final class PaymentLinks {
     static final int MAX_NOTE_TITLE_LENGTH = 60;
 
     static String note(String rideTitle) {
-        String title = rideTitle == null ? "" : visibleText(rideTitle).trim();
-        if (title.isEmpty()) {
-            return "TrojanRideshare ride";
-        }
-        if (title.codePointCount(0, title.length()) > MAX_NOTE_TITLE_LENGTH) {
-            title = title.substring(0, title.offsetByCodePoints(0, MAX_NOTE_TITLE_LENGTH)).trim()
-                    + "…";
-        }
-        return "TrojanRideshare: " + title;
-    }
-
-    private static String visibleText(String text) {
-        StringBuilder visible = new StringBuilder();
-        text.codePoints().forEach(codePoint -> {
-            int type = Character.getType(codePoint);
-            if (type != Character.CONTROL && type != Character.FORMAT) {
-                visible.appendCodePoint(codePoint);
-            } else if (Character.isWhitespace(codePoint)) {
-                visible.append(' ');
-            }
-        });
-        return visible.toString();
+        String title = DisplayText.clean(rideTitle, MAX_NOTE_TITLE_LENGTH);
+        return title.isEmpty() ? "TrojanRideshare ride" : "TrojanRideshare: " + title;
     }
 
     static String encode(String text) {

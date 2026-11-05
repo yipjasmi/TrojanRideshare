@@ -4,6 +4,7 @@ import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.model.Notification;
 import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.model.Ride;
+import com.trojanrideshare.app.util.DisplayText;
 import com.trojanrideshare.app.util.Money;
 
 import java.util.ArrayList;
@@ -88,12 +89,18 @@ final class PaymentNotifications {
         return notification;
     }
 
+    // Titles and names are written by other students, so line breaks, direction marks and
+    // runaway lengths could make a notification read like something it isn't.
+    static final int MAX_TITLE_LENGTH = 60;
+    static final int MAX_NAME_LENGTH = 40;
+
     private static String quoted(String title) {
-        return "\"" + (title == null || title.isEmpty() ? UNTITLED_RIDE : title) + "\"";
+        String cleaned = DisplayText.clean(title, MAX_TITLE_LENGTH);
+        return "\"" + (cleaned.isEmpty() ? UNTITLED_RIDE : cleaned) + "\"";
     }
 
     private static String nameOf(Map<String, String> names, String userId, String fallback) {
-        String name = names.get(userId);
-        return name == null || name.trim().isEmpty() ? fallback : name;
+        String name = DisplayText.clean(names.get(userId), MAX_NAME_LENGTH);
+        return name.isEmpty() ? fallback : name;
     }
 }

@@ -163,6 +163,23 @@ public class PaymentNotificationsTest {
     }
 
     @Test
+    public void shareFlagged_cleansATitleAndNameWrittenByAnotherStudent() {
+        Payment share = share(KYLE_ID, 15);
+        share.rideTitle = "LAX‮ run\nPayment cancelled";
+        Map<String, String> names = names();
+        names.put(ORGANIZER_ID, "Ashley\nYour account is locked");
+
+        String message = PaymentNotifications.shareFlagged(share, names).get(0).message;
+
+        assertEquals(
+                "Ashley Your account is locked flagged your unpaid $15.00 share of"
+                        + " \"LAX run Payment cancelled\".",
+                message
+        );
+        assertFalse(message.contains("\n"));
+    }
+
+    @Test
     public void shareFlagged_neverNotifiesTheOrganizerAboutTheirOwnShare() {
         assertTrue(PaymentNotifications.shareFlagged(share(ORGANIZER_ID, 15), names()).isEmpty());
     }
