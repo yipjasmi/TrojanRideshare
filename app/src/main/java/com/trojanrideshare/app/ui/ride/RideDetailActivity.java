@@ -2,6 +2,7 @@ package com.trojanrideshare.app.ui.ride;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.format.DateUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -24,12 +25,15 @@ import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.ride.RideDataAccess;
 import com.trojanrideshare.app.data.user.UserDataAccess;
 import com.trojanrideshare.app.model.JoinRequest;
+import com.trojanrideshare.app.model.Payment;
 import com.trojanrideshare.app.model.PlaceInfo;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
+import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.service.ride.EditRideService;
 import com.trojanrideshare.app.service.ride.LeaveRideService;
+import com.trojanrideshare.app.service.ride.RideTimelineService;
 import com.trojanrideshare.app.ui.payment.RecordCostActivity;
 import com.trojanrideshare.app.ui.profile.ProfileActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
@@ -39,6 +43,7 @@ import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -59,16 +64,24 @@ public class RideDetailActivity extends AppCompatActivity {
     private Button completeRideButton;
     private Button leaveRideButton;
     private Button cancelRideButton;
+    private RideTimelineView timeline;
+    private TextView ruleHint;
 
     private RideDataAccess rideDataAccess;
     private UserDataAccess userDataAccess;
     private JoinRequestService joinRequestService;
     private EditRideService editRideService;
     private LeaveRideService leaveRideService;
+    private PaymentService paymentService;
     private String currentUserId;
     private Ride ride;
+    /** Null until the payment listener answers. */
+    private List<Payment> shares;
+    private String sharesError;
+    private boolean watchingPayments;
 
     private ActivityResultLauncher<Intent> editRideLauncher;
+    private ActivityResultLauncher<Intent> recordCostLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +95,7 @@ public class RideDetailActivity extends AppCompatActivity {
         joinRequestService = new JoinRequestService();
         editRideService = new EditRideService();
         leaveRideService = new LeaveRideService();
+        paymentService = new PaymentService();
         currentUserId = getIntent().getStringExtra(EXTRA_CURRENT_USER_ID);
         if (currentUserId == null || currentUserId.trim().isEmpty()) {
             // Fall back to the signed-in user when the caller didn't pass an id
@@ -107,11 +121,21 @@ public class RideDetailActivity extends AppCompatActivity {
         leaveRideButton.setOnClickListener(v -> confirmLeave());
         cancelRideButton = findViewById(R.id.cancelRideButton);
         cancelRideButton.setOnClickListener(v -> confirmCancel());
+        timeline = findViewById(R.id.detailTimeline);
+        ruleHint = findViewById(R.id.detailRuleHint);
 
         editRideLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK && ride != null) {
+                        loadRide(ride.id);
+                    }
+                });
+        // Reload on any return so the timeline picks up a cost that was just recorded.
+        recordCostLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (ride != null) {
                         loadRide(ride.id);
                     }
                 });
@@ -188,6 +212,195 @@ public class RideDetailActivity extends AppCompatActivity {
 
         renderRiders(ride);
         configureAction(ride, availableSeats);
+        renderRuleHint(ride);
+        renderTimeline(ride);
+        watchPayments(ride);
+    }
+
+    private void renderTimeline(Ride ride) {
+        Timestamp now = Timestamp.now();
+        RideTimelineService.PaymentProgress progress = shares == null
+                ? null : RideTimelineService.paymentProgress(ride, currentUserId, shares);
+        List<RideTimelineView.Row> rows = new ArrayList<>();
+        for (RideTimelineService.StepState step
+                : RideTimelineService.steps(ride, currentUserId, now, progress)) {
+            rows.add(timelineRow(ride, step, now, progress));
+        }
+        timeline.setRows(rows);
+    }
+
+    private RideTimelineView.Row timelineRow(
+            Ride ride,
+            RideTimelineService.StepState step,
+            Timestamp now,
+            RideTimelineService.PaymentProgress progress
+    ) {
+        int titleRes;
+        String detail;
+        switch (step.step) {
+            case POSTED:
+                titleRes = R.string.ride_timeline_posted;
+                detail = ride.createdAt == null ? "" : DateUtils.formatDateTime(this,
+                        ride.createdAt.toDate().getTime(),
+                        DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_ABBREV_MONTH);
+                break;
+            case SEATS:
+                return seatsRow(ride, now, step.state);
+            case DEPARTED:
+                titleRes = R.string.ride_timeline_departed;
+                detail = getString(step.state == RideTimelineService.State.DONE
+                        ? R.string.ride_timeline_left
+                        : R.string.ride_timeline_leaves, formatWhen(ride.departureTime));
+                if (RideTimelineService.wasDelayed(ride)) {
+                    detail = getString(R.string.ride_timeline_delayed_from,
+                            detail, formatWhen(ride.originalDepartureTime));
+                }
+                break;
+            case COMPLETED:
+                titleRes = R.string.ride_timeline_completed;
+                detail = completedDetail(ride, step.state);
+                break;
+            case COST_SPLIT:
+                titleRes = R.string.ride_timeline_cost_split;
+                detail = costSplitDetail(ride);
+                break;
+            case PAID:
+                titleRes = R.string.ride_timeline_paid;
+                detail = paidDetail(ride, progress);
+                break;
+            case CANCELLED:
+            default:
+                titleRes = R.string.ride_timeline_cancelled;
+                detail = "";
+                break;
+        }
+        return new RideTimelineView.Row(getString(titleRes), detail, detail, step.state);
+    }
+
+    /** Dots are read out as "3 of 4 seats taken" instead of symbol names. */
+    private RideTimelineView.Row seatsRow(
+            Ride ride,
+            Timestamp now,
+            RideTimelineService.State state
+    ) {
+        int taken = RideSeats.taken(ride);
+        int total = RideSeats.total(ride);
+        int availableSeats = ride.getAvailableSeats();
+        String takenDescription = getString(R.string.seats_taken_description, taken, total);
+        String label;
+        if (availableSeats == 0) {
+            label = getString(R.string.seats_full);
+        } else if (ride.isActive() && !ride.hasDeparted(now)) {
+            label = getResources().getQuantityString(
+                    R.plurals.ride_timeline_seats_left, availableSeats, availableSeats);
+        } else {
+            label = takenDescription;
+        }
+        String spoken = label.equals(takenDescription)
+                ? takenDescription : takenDescription + ", " + label;
+        return new RideTimelineView.Row(getString(R.string.ride_timeline_seats),
+                RideSeats.dots(taken, total) + "  " + label, spoken, state);
+    }
+
+    private String completedDetail(Ride ride, RideTimelineService.State state) {
+        if (Ride.STATUS_COMPLETED.equals(ride.status)) {
+            return ride.completedAt == null ? "" : formatWhen(ride.completedAt);
+        }
+        if (state != RideTimelineService.State.CURRENT) {
+            return "";
+        }
+        boolean isOrganizer = currentUserId != null && currentUserId.equals(ride.organizerId);
+        return getString(isOrganizer
+                ? R.string.ride_timeline_complete_now
+                : R.string.ride_timeline_waiting_for_organizer);
+    }
+
+    private String costSplitDetail(Ride ride) {
+        if (!Ride.STATUS_COMPLETED.equals(ride.status) || ride.finalCost == null) {
+            return getString(R.string.ride_timeline_not_recorded);
+        }
+        int ways = ride.getAllParticipantIds().size();
+        return getResources().getQuantityString(R.plurals.ride_timeline_cost_split_ways, ways,
+                Money.format(Money.toCents(ride.finalCost)), ways);
+    }
+
+    private String paidDetail(Ride ride, RideTimelineService.PaymentProgress progress) {
+        if (!RideTimelineService.hasPayments(ride, currentUserId)) {
+            return "";
+        }
+        if (shares == null) {
+            return sharesError != null
+                    ? sharesError : getString(R.string.ride_timeline_checking_payments);
+        }
+        if (currentUserId.equals(ride.organizerId)) {
+            return progress.total == 0
+                    ? getString(R.string.payment_no_riders)
+                    : getResources().getQuantityString(R.plurals.payment_riders_paid,
+                            progress.total, progress.paid, progress.total);
+        }
+        Payment share = RideTimelineService.shareOf(shares, currentUserId);
+        if (share == null) {
+            return getString(R.string.ride_timeline_not_recorded);
+        }
+        long cents = Money.toCents(share.amount);
+        if (cents == 0) {
+            return getString(R.string.ride_timeline_nothing_owed);
+        }
+        return getString(share.paid
+                ? R.string.ride_timeline_you_paid
+                : R.string.ride_timeline_you_owe, Money.format(cents));
+    }
+
+    /** Organizers get every share on the ride and riders only their own, as the rules allow. */
+    private void watchPayments(Ride ride) {
+        // Firestore crashes binding a listener to an activity that is gone.
+        if (watchingPayments || isDestroyed()
+                || !RideTimelineService.hasPayments(ride, currentUserId)) {
+            return;
+        }
+        watchingPayments = true;
+        paymentService.watchShares(this, ride, currentUserId, new PaymentService.SharesCallback() {
+            @Override
+            public void onSuccess(List<Payment> loaded) {
+                shares = loaded;
+                sharesError = null;
+                renderTimeline(ride);
+            }
+
+            @Override
+            public void onError(String message) {
+                shares = null;
+                sharesError = message;
+                renderTimeline(ride);
+            }
+        });
+    }
+
+    private void renderRuleHint(Ride ride) {
+        String hint;
+        switch (RideTimelineService.hint(ride, currentUserId, Timestamp.now())) {
+            case LEAVE_UNTIL:
+                hint = getString(R.string.ride_hint_leave_until,
+                        formatWhen(RideTimelineService.leaveCutoff(ride)));
+                break;
+            case LEAVING_CLOSED:
+                hint = getResources().getQuantityString(R.plurals.ride_hint_leaving_closed,
+                        RideTimelineService.leaveCutoffHours(),
+                        RideTimelineService.leaveCutoffHours());
+                break;
+            case REQUESTS_CLOSE:
+                hint = getString(R.string.ride_hint_requests_close, formatWhen(ride.departureTime));
+                break;
+            case COMPLETE_AFTER_DEPARTURE:
+                hint = getString(R.string.ride_hint_complete_after_departure);
+                break;
+            case NONE:
+            default:
+                hint = "";
+                break;
+        }
+        ruleHint.setText(hint);
+        ruleHint.setVisibility(hint.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     /** One tappable row per rider (organizer first), opening that person's profile. */
@@ -510,7 +723,7 @@ public class RideDetailActivity extends AppCompatActivity {
                 Toast.makeText(RideDetailActivity.this, "Ride completed.", Toast.LENGTH_SHORT).show();
                 Intent costIntent = new Intent(RideDetailActivity.this, RecordCostActivity.class);
                 costIntent.putExtra(RecordCostActivity.EXTRA_RIDE_ID, ride.id);
-                startActivity(costIntent);
+                recordCostLauncher.launch(costIntent);
                 loadRide(ride.id);
             }
 
@@ -549,6 +762,16 @@ public class RideDetailActivity extends AppCompatActivity {
             return getString(R.string.search_unknown_location);
         }
         return emptyFallback(place.address, getString(R.string.search_unknown_location));
+    }
+
+    /** "Nov 14, 3:19 PM"; the year only shows when it isn't this year. */
+    private String formatWhen(Timestamp time) {
+        if (time == null) {
+            return getString(R.string.search_unknown_time);
+        }
+        return DateUtils.formatDateTime(this, time.toDate().getTime(),
+                DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_TIME
+                        | DateUtils.FORMAT_ABBREV_MONTH);
     }
 
     private String formatDeparture(Timestamp departureTime) {

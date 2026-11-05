@@ -170,6 +170,44 @@
     <string name="ride_detail_unknown_organizer">the organizer</string>
     <string name="ride_detail_edit">Mark as Delayed (change departure time)</string>
 
+    <string name="ride_timeline_title">Ride progress</string>
+    <string name="ride_timeline_posted">Posted</string>
+    <string name="ride_timeline_seats">Seats filling</string>
+    <string name="ride_timeline_departed">Departed</string>
+    <string name="ride_timeline_completed">Completed</string>
+    <string name="ride_timeline_cost_split">Cost split</string>
+    <string name="ride_timeline_paid">Paid</string>
+    <string name="ride_timeline_cancelled">Cancelled</string>
+    <string name="ride_timeline_done">done</string>
+    <string name="ride_timeline_current">current</string>
+    <string name="ride_timeline_upcoming">upcoming</string>
+    <string name="ride_timeline_step_description">Step %1$d of %2$d, %3$s, %4$s</string>
+    <string name="ride_timeline_leaves">Leaves %1$s</string>
+    <string name="ride_timeline_left">Left %1$s</string>
+    <string name="ride_timeline_delayed_from">%1$s (delayed from %2$s)</string>
+    <string name="ride_timeline_complete_now">You can complete this ride now</string>
+    <string name="ride_timeline_waiting_for_organizer">Waiting for the organizer to complete it</string>
+    <string name="ride_timeline_not_recorded">Not recorded yet</string>
+    <string name="ride_timeline_checking_payments">Checking payments…</string>
+    <string name="ride_timeline_you_paid">You paid %1$s</string>
+    <string name="ride_timeline_you_owe">You owe %1$s</string>
+    <string name="ride_timeline_nothing_owed">You owe nothing</string>
+    <plurals name="ride_timeline_seats_left">
+        <item quantity="one">%d seat left</item>
+        <item quantity="other">%d seats left</item>
+    </plurals>
+    <plurals name="ride_timeline_cost_split_ways">
+        <item quantity="one">%1$s, not split</item>
+        <item quantity="other">%1$s split %2$d ways</item>
+    </plurals>
+    <string name="ride_hint_leave_until">You can leave until %1$s</string>
+    <string name="ride_hint_requests_close">Requests close at departure (%1$s)</string>
+    <string name="ride_hint_complete_after_departure">You can mark it complete after departure</string>
+    <plurals name="ride_hint_leaving_closed">
+        <item quantity="one">Leaving closed %d hour before departure</item>
+        <item quantity="other">Leaving closed %d hours before departure</item>
+    </plurals>
+
     <string name="edit_ride_title">Mark ride delayed</string>
     <string name="edit_ride_load_error">Could not load this ride. Please try again.</string>
 
