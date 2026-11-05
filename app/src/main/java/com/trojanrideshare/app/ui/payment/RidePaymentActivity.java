@@ -97,9 +97,13 @@ public class RidePaymentActivity extends AppCompatActivity {
         }
 
         stateRetry.setOnClickListener(view -> load());
-        findViewById(R.id.paymentAppsNudgeAction).setOnClickListener(
-                view -> startActivity(new Intent(this, ProfileActivity.class))
-        );
+        // With the user's own id the profile opens as a page with a back arrow, not as the Profile
+        // tab, whose bottom nav would close this screen.
+        findViewById(R.id.paymentAppsNudgeAction).setOnClickListener(view -> {
+            Intent profile = new Intent(this, ProfileActivity.class);
+            profile.putExtra(ProfileActivity.EXTRA_USER_ID, currentUserId);
+            startActivity(profile);
+        });
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         rideId = getIntent().getStringExtra(EXTRA_RIDE_ID);
         if (user == null || rideId == null) {
