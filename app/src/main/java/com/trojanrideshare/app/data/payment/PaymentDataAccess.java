@@ -13,6 +13,7 @@ import com.google.firebase.firestore.MetadataChanges;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.trojanrideshare.app.model.Payment;
+import com.trojanrideshare.app.model.PaymentHandles;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.util.Money;
 
@@ -116,6 +117,7 @@ public class PaymentDataAccess implements PaymentRepository {
 
         Tasks.whenAllComplete(lookups).addOnSuccessListener(unused -> {
             Map<String, String> names = new HashMap<>();
+            Map<String, PaymentHandles> handles = new HashMap<>();
             for (Task<DocumentSnapshot> lookup : lookups) {
                 if (!lookup.isSuccessful()) continue;
                 // Show the user's chosen nickname, falling back to their full name.
@@ -126,9 +128,19 @@ public class PaymentDataAccess implements PaymentRepository {
                 if (name instanceof String) {
                     names.put(lookup.getResult().getId(), (String) name);
                 }
+                handles.put(lookup.getResult().getId(), new PaymentHandles(
+                        stringField(lookup.getResult(), "venmoUsername"),
+                        stringField(lookup.getResult(), "cashtag")
+                ));
             }
-            callback.onSuccess(names);
+            callback.onSuccess(names, handles);
         });
+    }
+
+    // getString() throws on a non-string, and users can write any type into their own profile.
+    private static String stringField(DocumentSnapshot snapshot, String field) {
+        Object value = snapshot.get(field);
+        return value instanceof String ? (String) value : null;
     }
 
     @Override
@@ -273,6 +285,24 @@ public class PaymentDataAccess implements PaymentRepository {
             return null;
         }).addOnSuccessListener(unused -> callback.onSuccess())
                 .addOnFailureListener(exception -> handleUpdateFailure(exception, callback));
+    }
+
+    @Override
+    public void saveHandles(
+            String userId,
+            String venmoUsername,
+            String cashtag,
+            UpdateCallback callback
+    ) {
+        Map<String, Object> changes = new HashMap<>();
+        changes.put("venmoUsername", venmoUsername == null ? FieldValue.delete() : venmoUsername);
+        changes.put("cashtag", cashtag == null ? FieldValue.delete() : cashtag);
+
+        firestore.collection(USERS_COLLECTION)
+                .document(userId)
+                .update(changes)
+                .addOnSuccessListener(unused -> callback.onSuccess())
+                .addOnFailureListener(callback::onError);
     }
 
     private static Map<String, Object> shareFields(

@@ -48,8 +48,34 @@
     <string name="join_request_not_pending">This request is no longer pending. The ride list was refreshed.</string>
     <string name="join_request_status_error">Unable to load your pending request status.</string>
     <string name="cancel">Cancel</string>
-    <string name="main_search_action">Find rides</string>
-    <string name="main_manage_requests_action">Manage join requests</string>
+    <string name="main_search_action">Find a ride</string>
+    <string name="main_next_ride_heading">Next ride</string>
+    <string name="main_requests_heading">Join requests</string>
+    <string name="main_no_upcoming_rides">No upcoming rides</string>
+    <string name="main_leaving_now">Leaving now</string>
+    <string name="main_leaving_in_minutes">Leaving in %1$d min</string>
+    <string name="main_leaving_in_hours">Leaving in %1$dh %2$dm</string>
+    <string name="main_leaving_in_days">Leaving in %1$dd %2$dh</string>
+    <string name="main_you_owe">You owe</string>
+    <string name="main_owed_to_you">Owed to you</string>
+    <string name="main_settled_up">All settled up</string>
+    <string name="main_no_requests_waiting">No requests waiting</string>
+    <string name="main_section_error">Couldn\'t load.</string>
+    <string name="main_try_again">Try again</string>
+    <string name="loading">Loading</string>
+    <string name="main_badge_overflow">%1$d+</string>
+    <plurals name="main_requests_waiting">
+        <item quantity="one">%d request waiting</item>
+        <item quantity="other">%d requests waiting</item>
+    </plurals>
+    <plurals name="main_notifications_unread">
+        <item quantity="one">Notifications, %d unread</item>
+        <item quantity="other">Notifications, %d unread</item>
+    </plurals>
+    <plurals name="nav_requests_badge">
+        <item quantity="one">%d pending request</item>
+        <item quantity="other">%d pending requests</item>
+    </plurals>
     <string name="back">Back</string>
     <string name="organizer_requests_title">Requests for my rides</string>
     <string name="organizer_requests_subtitle">Accepting a rider fills one seat (the organizer counts as a rider). When a ride is full, other pending requests stay pending but can\'t be accepted until a seat opens. Acceptances stop at departure.</string>
@@ -125,6 +151,26 @@
     <string name="payment_flag_name">Flag %1$s</string>
     <string name="payment_flag_title">Flag %1$s?</string>
     <string name="payment_flag_body">They have not marked their %1$s share paid after %2$d days. They will see this flag on their share until they pay.</string>
+    <string name="payment_app_venmo">Venmo</string>
+    <string name="payment_app_cash_app">Cash App</string>
+    <string name="payment_pay_venmo">Pay %1$s %2$s on Venmo</string>
+    <string name="payment_pay_cash_app">Pay %1$s %2$s on Cash App</string>
+    <string name="payment_paid_hint">Paid on %1$s? Tap Mark as paid.</string>
+    <string name="payment_app_missing">Nothing on this phone can open %1$s.</string>
+    <string name="payment_request_venmo">Request on Venmo</string>
+    <string name="payment_request_venmo_name">Request %1$s from %2$s on Venmo</string>
+    <string name="payment_apps_title">Payment apps</string>
+    <string name="payment_apps_visibility">Other students can see these so riders can pay you.</string>
+    <string name="payment_apps_empty">Add Venmo or Cash App so riders can pay you</string>
+    <string name="payment_apps_venmo">Venmo @%1$s</string>
+    <string name="payment_apps_cash_app">Cash App $%1$s</string>
+    <string name="payment_apps_both">%1$s · %2$s</string>
+    <string name="payment_apps_venmo_hint">Venmo username</string>
+    <string name="payment_apps_cashtag_hint">Cashtag</string>
+    <string name="payment_apps_venmo_prefix" translatable="false">\@</string>
+    <string name="payment_apps_cashtag_prefix" translatable="false">$</string>
+    <string name="payment_apps_save">Save</string>
+    <string name="payment_apps_saved">Payment apps saved</string>
     <string-array name="search_sort_options">
         <item>Earliest departure</item>
         <item>Latest departure</item>
@@ -164,12 +210,49 @@
     <string name="ride_detail_title">Ride details</string>
     <string name="ride_detail_organizer_format">Organized by %1$s</string>
     <string name="ride_detail_cost_format">Expected cost: %1$s</string>
-    <string name="ride_detail_status_format">Status: %1$s</string>
     <string name="ride_detail_badge_organizer">You are the organizer of this ride.</string>
     <string name="ride_detail_badge_joined">You have joined this ride.</string>
     <string name="ride_detail_load_error">Could not load this ride. Please try again.</string>
     <string name="ride_detail_unknown_organizer">the organizer</string>
     <string name="ride_detail_edit">Mark as Delayed (change departure time)</string>
+
+    <string name="ride_timeline_title">Ride progress</string>
+    <string name="ride_timeline_posted">Posted</string>
+    <string name="ride_timeline_seats">Seats filling</string>
+    <string name="ride_timeline_departed">Departed</string>
+    <string name="ride_timeline_completed">Completed</string>
+    <string name="ride_timeline_cost_split">Cost split</string>
+    <string name="ride_timeline_paid">Paid</string>
+    <string name="ride_timeline_cancelled">Cancelled</string>
+    <string name="ride_timeline_done">done</string>
+    <string name="ride_timeline_current">current</string>
+    <string name="ride_timeline_upcoming">upcoming</string>
+    <string name="ride_timeline_step_description">Step %1$d of %2$d, %3$s, %4$s</string>
+    <string name="ride_timeline_leaves">Leaves %1$s</string>
+    <string name="ride_timeline_left">Left %1$s</string>
+    <string name="ride_timeline_delayed_from">%1$s (delayed from %2$s)</string>
+    <string name="ride_timeline_complete_now">You can complete this ride now</string>
+    <string name="ride_timeline_waiting_for_organizer">Waiting for the organizer to complete it</string>
+    <string name="ride_timeline_not_recorded">Not recorded yet</string>
+    <string name="ride_timeline_checking_payments">Checking payments…</string>
+    <string name="ride_timeline_you_paid">You paid %1$s</string>
+    <string name="ride_timeline_you_owe">You owe %1$s</string>
+    <string name="ride_timeline_nothing_owed">You owe nothing</string>
+    <plurals name="ride_timeline_seats_left">
+        <item quantity="one">%d seat left</item>
+        <item quantity="other">%d seats left</item>
+    </plurals>
+    <plurals name="ride_timeline_cost_split_ways">
+        <item quantity="one">%1$s, not split</item>
+        <item quantity="other">%1$s split %2$d ways</item>
+    </plurals>
+    <string name="ride_hint_leave_until">You can leave until %1$s</string>
+    <string name="ride_hint_requests_close">Requests close at departure (%1$s)</string>
+    <string name="ride_hint_complete_after_departure">You can mark it complete after departure</string>
+    <plurals name="ride_hint_leaving_closed">
+        <item quantity="one">Leaving closed %d hour before departure</item>
+        <item quantity="other">Leaving closed %d hours before departure</item>
+    </plurals>
 
     <string name="edit_ride_title">Mark ride delayed</string>
     <string name="edit_ride_load_error">Could not load this ride. Please try again.</string>
@@ -178,7 +261,13 @@
     <string name="status_delayed">Delayed</string>
     <string name="status_cancelled">Cancelled</string>
     <string name="status_completed">Completed</string>
+    <string name="status_departed">Departed</string>
     <string name="status_unknown">Unknown</string>
+
+    <string name="seats_taken_description">%1$d of %2$d seats taken</string>
+    <string name="seats_full">Full</string>
+    <string name="cost_estimate_each">~%1$s each</string>
+    <string name="cost_estimate_each_if_you_join">~%1$s each if you join</string>
 
     <plurals name="payment_riders_paid">
         <item quantity="one">%1$d of %2$d rider paid</item>

@@ -26,12 +26,20 @@
             android:orientation="vertical"
             android:padding="24dp">
 
-            <ProgressBar
-                android:id="@+id/detailLoadingIndicator"
-                android:layout_width="wrap_content"
+            <!-- Outside detailContent so the title shared from the tapped card shows while loading. -->
+            <TextView
+                android:id="@+id/detailTitle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="24dp" />
+                android:textAppearance="?attr/textAppearanceHeadlineSmall"
+                android:visibility="gone" />
+
+            <com.trojanrideshare.app.util.SkeletonView
+                android:id="@+id/detailLoadingIndicator"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:contentDescription="@string/loading" />
 
             <LinearLayout
                 android:id="@+id/detailContent"
@@ -41,10 +49,10 @@
                 android:visibility="gone">
 
                 <TextView
-                    android:id="@+id/detailTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+                    android:id="@+id/detailStatus"
+                    style="@style/StatusChip"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone" />
 
                 <!-- Opens the organizer's profile; the chevron says it's tappable -->
                 <TextView
@@ -89,11 +97,17 @@
                     android:textAppearance="?attr/textAppearanceBodyMedium" />
 
                 <TextView
-                    android:id="@+id/detailStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium" />
+                    android:layout_marginTop="16dp"
+                    android:text="@string/ride_timeline_title"
+                    android:textAppearance="?attr/textAppearanceTitleSmall" />
+
+                <com.trojanrideshare.app.ui.ride.RideTimelineView
+                    android:id="@+id/detailTimeline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp" />
 
                 <TextView
                     android:id="@+id/detailRidersHeader"
@@ -124,13 +138,25 @@
                     android:textAppearance="?attr/textAppearanceBodyLarge"
                     android:visibility="gone" />
 
+                <TextView
+                    android:id="@+id/detailRuleHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:visibility="gone" />
+
                 <Button
                     android:id="@+id/joinButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
                     android:text="@string/join_request_action"
-                    android:visibility="gone" />
+                    android:textColor="@color/join_button_content"
+                    android:visibility="gone"
+                    app:backgroundTint="@color/join_button_container"
+                    app:iconTint="@color/join_button_content" />
 
                 <Button
                     android:id="@+id/editRideButton"
@@ -164,7 +190,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:text="Cancel Ride"
-                    android:textColor="#B3261E"
+                    android:textColor="?attr/colorError"
                     android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>

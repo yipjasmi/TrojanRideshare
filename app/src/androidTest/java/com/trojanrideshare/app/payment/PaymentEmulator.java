@@ -144,6 +144,12 @@ final class PaymentEmulator {
         return done.getTask();
     }
 
+    static Task<Void> saveHandles(String userId, String venmoUsername, String cashtag) {
+        TaskCompletionSource<Void> done = new TaskCompletionSource<>();
+        new PaymentDataAccess().saveHandles(userId, venmoUsername, cashtag, completing(done));
+        return done.getTask();
+    }
+
     private static PaymentRepository.UpdateCallback completing(TaskCompletionSource<Void> done) {
         return new PaymentRepository.UpdateCallback() {
             @Override
@@ -244,6 +250,15 @@ final class PaymentEmulator {
     // The organizer can't change a posted title, so an untitled ride has to be made as admin.
     void clearTitle(String rideId) throws Exception {
         adminUpdate("rides/" + rideId, "\"title\":{\"nullValue\":null}", "\"title\"");
+    }
+
+    // The rules now refuse handles the app can't link, but a profile saved before they were
+    // published can still hold one, so that case has to be planted as admin.
+    void plantHandles(String userId, String venmoUsername, String cashtag) throws Exception {
+        adminUpdate("users/" + userId,
+                "\"venmoUsername\":{\"stringValue\":\"" + venmoUsername + "\"},"
+                        + "\"cashtag\":{\"stringValue\":\"" + cashtag + "\"}",
+                "\"venmoUsername\",\"cashtag\"");
     }
 
     private static String stringArray(List<String> values) {

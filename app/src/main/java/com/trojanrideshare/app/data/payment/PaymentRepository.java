@@ -3,6 +3,7 @@ package com.trojanrideshare.app.data.payment;
 import android.app.Activity;
 
 import com.trojanrideshare.app.model.Payment;
+import com.trojanrideshare.app.model.PaymentHandles;
 import com.trojanrideshare.app.model.Ride;
 
 import java.util.Collection;
@@ -37,7 +38,7 @@ public interface PaymentRepository {
     }
 
     interface NamesCallback {
-        void onSuccess(Map<String, String> names);
+        void onSuccess(Map<String, String> names, Map<String, PaymentHandles> handles);
     }
 
     interface UpdateCallback {
@@ -69,4 +70,10 @@ public interface PaymentRepository {
     );
     void markPaid(String rideId, String userId, UpdateCallback callback);
     void flag(String rideId, String riderId, UpdateCallback callback);
+    void saveHandles(
+            String userId,
+            String venmoUsername,
+            String cashtag,
+            UpdateCallback callback
+    );
 }

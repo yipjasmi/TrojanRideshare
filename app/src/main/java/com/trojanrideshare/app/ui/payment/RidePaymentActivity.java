@@ -1,6 +1,8 @@
 package com.trojanrideshare.app.ui.payment;
 
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,19 +20,27 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.Payment;
+import com.trojanrideshare.app.model.PaymentHandles;
 import com.trojanrideshare.app.model.RidePaymentDetails;
+import com.trojanrideshare.app.service.payment.PaymentLinks;
 import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.util.Money;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class RidePaymentActivity extends AppCompatActivity {
     public static final String EXTRA_RIDE_ID = "rideId";
+
+    private static final String STATE_PAID_HINT_APP = "paidHintApp";
 
     private PaymentService paymentService;
     private String rideId;
     private String currentUserId;
     private RidePaymentDetails details;
+    private String paidHintApp;
+    private final Set<String> unpaidUserIds = new HashSet<>();
 
     private View stateContainer;
     private View stateProgress;
@@ -41,7 +51,11 @@ public class RidePaymentActivity extends AppCompatActivity {
     private TextView amountValue;
     private TextView amountDetail;
     private TextView statusText;
+    private View paidCheck;
     private TextView actionError;
+    private Button payVenmoButton;
+    private Button payCashAppButton;
+    private TextView paidHint;
     private Button primaryAction;
     private TextView sharesTitle;
     private LinearLayout sharesList;
@@ -64,11 +78,18 @@ public class RidePaymentActivity extends AppCompatActivity {
         amountValue = findViewById(R.id.amountValue);
         amountDetail = findViewById(R.id.amountDetail);
         statusText = findViewById(R.id.statusText);
+        paidCheck = findViewById(R.id.paidCheck);
         actionError = findViewById(R.id.actionError);
+        payVenmoButton = findViewById(R.id.payVenmoButton);
+        payCashAppButton = findViewById(R.id.payCashAppButton);
+        paidHint = findViewById(R.id.paidHint);
         primaryAction = findViewById(R.id.primaryAction);
         sharesTitle = findViewById(R.id.sharesTitle);
         sharesList = findViewById(R.id.sharesList);
         footnote = findViewById(R.id.footnote);
+        if (savedInstanceState != null) {
+            paidHintApp = savedInstanceState.getString(STATE_PAID_HINT_APP);
+        }
 
         stateRetry.setOnClickListener(view -> load());
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
@@ -86,6 +107,13 @@ public class RidePaymentActivity extends AppCompatActivity {
         if (currentUserId != null) {
             load();
         }
+    }
+
+    // Android can kill this screen while Venmo is open, and the paid hint has to survive that.
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_PAID_HINT_APP, paidHintApp);
     }
 
     private void load() {
@@ -161,6 +189,10 @@ public class RidePaymentActivity extends AppCompatActivity {
         sharesTitle.setVisibility(View.GONE);
         primaryAction.setVisibility(View.GONE);
         statusText.setVisibility(View.GONE);
+        paidCheck.setVisibility(View.GONE);
+        payVenmoButton.setVisibility(View.GONE);
+        payCashAppButton.setVisibility(View.GONE);
+        paidHint.setVisibility(View.GONE);
 
         if (share == null) {
             showAmountHeader("", getString(R.string.payment_no_cost_yet), "");
@@ -180,12 +212,17 @@ public class RidePaymentActivity extends AppCompatActivity {
                         )
         );
         showStatus(PaymentUi.shareStatus(this, share), share.flagged);
+        boolean justPaid = justPaid(share);
 
         if (share.paid) {
+            if (share.paidAt != null) {
+                PaymentUi.showPaidCheck(paidCheck, justPaid);
+            }
             footnote.setText(R.string.payment_outside_app);
             return;
         }
         footnote.setText(getString(R.string.payment_reimburse, organizerName()));
+        showPayButtons(cents);
         primaryAction.setText(R.string.payment_mark_paid);
         primaryAction.setOnClickListener(view -> confirmMarkPaid(cents));
         primaryAction.setVisibility(View.VISIBLE);
@@ -273,13 +310,118 @@ public class RidePaymentActivity extends AppCompatActivity {
         if (share.flagged) {
             status.setTextColor(colorError());
         }
+        boolean justPaid = justPaid(share);
+        if (share.paidAt != null) {
+            PaymentUi.showPaidCheck(row.findViewById(R.id.shareCheck), justPaid);
+        }
         if (!share.flagged && share.isOverdue(System.currentTimeMillis())) {
             Button flagButton = row.findViewById(R.id.shareFlag);
             flagButton.setContentDescription(getString(R.string.payment_flag_name, name));
             flagButton.setOnClickListener(view -> confirmFlag(share, name, cents));
             flagButton.setVisibility(View.VISIBLE);
         }
+        if (!share.paid) {
+            showRequestButton(row.findViewById(R.id.shareRequest), share, name, cents);
+        }
         sharesList.addView(row);
+    }
+
+    private void showRequestButton(
+            Button requestButton,
+            Payment share,
+            String name,
+            long cents
+    ) {
+        String link = PaymentLinks.venmoCharge(
+                handlesOf(share.userId).venmoUsername,
+                cents,
+                details.ride.title
+        );
+        if (link == null) {
+            return;
+        }
+        requestButton.setContentDescription(
+                getString(R.string.payment_request_venmo_name, Money.format(cents), name)
+        );
+        requestButton.setOnClickListener(
+                view -> openPaymentApp(link, getString(R.string.payment_app_venmo))
+        );
+        requestButton.setVisibility(View.VISIBLE);
+    }
+
+    private void showPayButtons(long cents) {
+        PaymentHandles organizer = handlesOf(details.ride.organizerId);
+        showPayButton(
+                payVenmoButton,
+                PaymentLinks.venmoPay(organizer.venmoUsername, cents, details.ride.title),
+                R.string.payment_pay_venmo,
+                R.string.payment_app_venmo,
+                cents
+        );
+        showPayButton(
+                payCashAppButton,
+                PaymentLinks.cashApp(organizer.cashtag),
+                R.string.payment_pay_cash_app,
+                R.string.payment_app_cash_app,
+                cents
+        );
+        showPaidHint();
+    }
+
+    private void showPayButton(
+            Button button,
+            String link,
+            int labelRes,
+            int appRes,
+            long cents
+    ) {
+        if (link == null) {
+            return;
+        }
+        button.setText(getString(labelRes, organizerName(), Money.format(cents)));
+        button.setOnClickListener(view -> {
+            String app = getString(appRes);
+            if (openPaymentApp(link, app)) {
+                paidHintApp = app;
+                showPaidHint();
+            }
+        });
+        button.setVisibility(View.VISIBLE);
+    }
+
+    // Opening Venmo proves nothing about paying, so this only nudges. Marking paid stays manual.
+    private void showPaidHint() {
+        if (paidHintApp == null) {
+            return;
+        }
+        paidHint.setText(getString(R.string.payment_paid_hint, paidHintApp));
+        paidHint.setVisibility(View.VISIBLE);
+    }
+
+    private boolean openPaymentApp(String link, String app) {
+        actionError.setVisibility(View.GONE);
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
+            return true;
+        } catch (ActivityNotFoundException exception) {
+            actionError.setText(getString(R.string.payment_app_missing, app));
+            actionError.setVisibility(View.VISIBLE);
+            return false;
+        }
+    }
+
+    private PaymentHandles handlesOf(String userId) {
+        PaymentHandles handles = details.handles.get(userId);
+        return handles != null ? handles : new PaymentHandles(null, null);
+    }
+
+    // True once, when a share this screen showed as unpaid comes back paid.
+    private boolean justPaid(Payment share) {
+        if (!share.paid) {
+            unpaidUserIds.add(share.userId);
+            return false;
+        }
+        return unpaidUserIds.remove(share.userId);
     }
 
     private void confirmMarkPaid(long cents) {

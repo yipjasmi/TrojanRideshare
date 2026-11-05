@@ -12,6 +12,7 @@ import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.data.payment.PaymentRepository;
 import com.trojanrideshare.app.model.OrganizerRideSummary;
 import com.trojanrideshare.app.model.Payment;
+import com.trojanrideshare.app.model.PaymentHandles;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.RidePaymentDetails;
 
@@ -300,6 +301,68 @@ public class PaymentServiceTest {
         assertEquals("You can flag a rider once 7 days have passed.", result.error);
     }
 
+    @Test
+    public void loadRideDetails_carriesEachParticipantsPaymentHandles() {
+        FakeRepository repository = new FakeRepository();
+        repository.ride = ride("ride-1", ORGANIZER_ID, Ride.STATUS_COMPLETED, RIDER_ID);
+        repository.handles.put(ORGANIZER_ID, new PaymentHandles("ashley-lan", "ashley"));
+        DetailsResult result = new DetailsResult();
+
+        new PaymentService(repository).loadRideDetails("ride-1", RIDER_ID, result);
+
+        assertEquals("ashley-lan", result.details.handles.get(ORGANIZER_ID).venmoUsername);
+        assertEquals("ashley", result.details.handles.get(ORGANIZER_ID).cashtag);
+    }
+
+    @Test
+    public void saveHandles_writesTheHandlesWithoutTheirPrefixes() {
+        FakeRepository repository = new FakeRepository();
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository).saveHandles(RIDER_ID, " @kyle-t ", "$kyle", result);
+
+        assertEquals("kyle-t", repository.savedVenmoUsername);
+        assertEquals("kyle", repository.savedCashtag);
+        assertEquals(1, result.successCount);
+    }
+
+    @Test
+    public void saveHandles_clearsABlankHandle() {
+        FakeRepository repository = new FakeRepository();
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository).saveHandles(RIDER_ID, "", "  ", result);
+
+        assertEquals(1, repository.handleSaves);
+        assertNull(repository.savedVenmoUsername);
+        assertNull(repository.savedCashtag);
+    }
+
+    @Test
+    public void saveHandles_writesNothingWhenAHandleIsInvalid() {
+        FakeRepository repository = new FakeRepository();
+        UpdateResult venmoResult = new UpdateResult();
+        UpdateResult cashtagResult = new UpdateResult();
+
+        new PaymentService(repository).saveHandles(RIDER_ID, "kyle/t", "kyle", venmoResult);
+        new PaymentService(repository).saveHandles(RIDER_ID, "kyle-t", "12345", cashtagResult);
+
+        assertEquals(0, repository.handleSaves);
+        assertEquals("Use only letters, numbers, - and _ in a Venmo username.", venmoResult.error);
+        assertEquals("A cashtag needs at least one letter.", cashtagResult.error);
+    }
+
+    @Test
+    public void saveHandles_reportsUnexpectedFailures() {
+        FakeRepository repository = new FakeRepository();
+        repository.exception = new IllegalStateException("network");
+        UpdateResult result = new UpdateResult();
+
+        new PaymentService(repository).saveHandles(RIDER_ID, "kyle-t", "", result);
+
+        assertEquals("Unable to save your payment apps. Please try again.", result.error);
+    }
+
     private static String saveSplitError(PaymentRepository.Failure failure) {
         FakeRepository repository = new FakeRepository();
         repository.failure = failure;
@@ -343,6 +406,10 @@ public class PaymentServiceTest {
         private Exception exception;
         private Exception sharesException;
         private int rideShareLoads;
+        private Map<String, PaymentHandles> handles = new HashMap<>();
+        private int handleSaves;
+        private String savedVenmoUsername;
+        private String savedCashtag;
 
         @Override
         public void loadRide(String rideId, RideCallback callback) {
@@ -381,7 +448,7 @@ public class PaymentServiceTest {
         @Override
         public void loadNames(Collection<String> userIds, NamesCallback callback) {
             Map<String, String> names = new HashMap<>();
-            callback.onSuccess(names);
+            callback.onSuccess(names, handles);
         }
 
         @Override
@@ -423,6 +490,19 @@ public class PaymentServiceTest {
 
         @Override
         public void flag(String rideId, String riderId, UpdateCallback callback) {
+            completeUpdate(callback);
+        }
+
+        @Override
+        public void saveHandles(
+                String userId,
+                String venmoUsername,
+                String cashtag,
+                UpdateCallback callback
+        ) {
+            handleSaves++;
+            savedVenmoUsername = venmoUsername;
+            savedCashtag = cashtag;
             completeUpdate(callback);
         }
 

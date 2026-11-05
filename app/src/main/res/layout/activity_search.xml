@@ -5,16 +5,21 @@
     android:layout_height="match_parent">
 
     <ScrollView
+        android:id="@+id/searchScroll"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@id/bottomNavContainer"
         android:fillViewport="true">
 
+        <!-- The bottom padding keeps the last card clear of the Create a ride button. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:paddingStart="24dp"
+            android:paddingTop="24dp"
+            android:paddingEnd="24dp"
+            android:paddingBottom="96dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -297,13 +302,19 @@
                 android:layout_height="wrap_content"
                 android:text="@string/search_clear_filters" />
 
-            <ProgressBar
+            <LinearLayout
                 android:id="@+id/searchLoadingIndicator"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="24dp"
-                android:visibility="gone" />
+                android:layout_marginTop="16dp"
+                android:contentDescription="@string/loading"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <include layout="@layout/item_search_skeleton" />
+
+                <include layout="@layout/item_search_skeleton" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/searchResultMessage"

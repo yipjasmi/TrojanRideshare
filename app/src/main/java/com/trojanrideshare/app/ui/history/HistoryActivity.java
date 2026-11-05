@@ -22,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.firebase.Timestamp;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.data.user.UserDataAccess;
 import com.trojanrideshare.app.model.HistoryFilter;
@@ -37,6 +38,7 @@ import com.trojanrideshare.app.util.BottomNavHelper;
 import com.trojanrideshare.app.util.Money;
 import com.trojanrideshare.app.util.PlaceResolver;
 import com.trojanrideshare.app.util.PlacesLocationPicker;
+import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
@@ -375,9 +377,7 @@ public class HistoryActivity extends AppCompatActivity {
         ((TextView) card.findViewById(R.id.historyRideTitle)).setText(fallback(ride.title, "Ride"));
         TextView status = card.findViewById(R.id.historyRideStatus);
         boolean completed = Ride.STATUS_COMPLETED.equals(ride.status);
-        status.setText(completed ? "Completed" : Ride.STATUS_CANCELLED.equals(ride.status) ? "Cancelled" : statusLabel(ride.status));
-        tintBadge(status, completed ? com.google.android.material.R.attr.colorSecondaryContainer : com.google.android.material.R.attr.colorErrorContainer,
-                completed ? com.google.android.material.R.attr.colorOnSecondaryContainer : com.google.android.material.R.attr.colorOnErrorContainer);
+        RideStatusChip.of(ride, Timestamp.now()).applyTo(status);
 
         ((TextView) card.findViewById(R.id.historyRideRoute)).setText(
                 placeName(ride.origin) + "  →  " + placeName(ride.destination));
@@ -580,11 +580,5 @@ public class HistoryActivity extends AppCompatActivity {
         if (p == null) return "Unknown location";
         if (p.name != null && !p.name.trim().isEmpty()) return p.name;
         return fallback(p.address, "Unknown location");
-    }
-
-    private static String statusLabel(String value) {
-        if (Ride.STATUS_DELAYED.equals(value)) return "Delayed";
-        if (Ride.STATUS_ON_TIME.equals(value)) return "On time";
-        return fallback(value, "Unknown");
     }
 }

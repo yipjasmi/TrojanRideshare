@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="field_error">#FFB4AB</color>
+
+    <color name="theme_primary">#FFB4A8</color>
+    <color name="theme_on_primary">#690100</color>
+    <color name="theme_primary_container">#990000</color>
+    <color name="theme_on_primary_container">#FFDAD4</color>
+
+    <color name="theme_secondary">#FFCC00</color>
+    <color name="theme_on_secondary">#3C2F00</color>
+    <color name="theme_secondary_container">#574500</color>
+    <color name="theme_on_secondary_container">#FFE08B</color>
+
+    <color name="theme_surface">#1A1110</color>
+    <color name="theme_on_surface">#F1DEDC</color>
+    <color name="theme_surface_variant">#534341</color>
+    <color name="theme_on_surface_variant">#D8C2BF</color>
+    <color name="theme_surface_container_low">#231918</color>
+    <color name="theme_surface_container">#271D1C</color>
+    <color name="theme_surface_container_high">#322826</color>
+    <color name="theme_surface_container_highest">#3D3231</color>
+    <color name="theme_outline">#A08C8A</color>
+    <color name="theme_outline_variant">#534341</color>
+
+    <color name="status_on_time_container">#1F4D2C</color>
+    <color name="status_on_time_text">#B8F0C3</color>
+    <color name="status_delayed_container">#5C3A00</color>
+    <color name="status_delayed_text">#FFDDB8</color>
+    <color name="status_departed_container">#33424E</color>
+    <color name="status_departed_text">#D5E3EF</color>
+    <color name="status_completed_container">#3B3534</color>
+    <color name="status_completed_text">#E8E2E1</color>
+    <color name="status_cancelled_container">#6E2420</color>
+    <color name="status_cancelled_text">#FFDAD6</color>
+</resources>

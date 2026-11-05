@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Request to join: filled, then tonal once a request is pending (the button is activated).
+     Pending is listed before disabled so the disabled pending button on ride details stays readable. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="?attr/colorSecondaryContainer" android:state_activated="true" />
+    <item android:alpha="0.12" android:color="?attr/colorOnSurface" android:state_enabled="false" />
+    <item android:color="?attr/colorPrimary" />
+</selector>

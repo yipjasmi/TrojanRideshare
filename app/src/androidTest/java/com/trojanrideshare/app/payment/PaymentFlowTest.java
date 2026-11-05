@@ -6,7 +6,6 @@ import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.action.ViewActions.closeSoftKeyboard;
 import static androidx.test.espresso.action.ViewActions.replaceText;
 import static androidx.test.espresso.action.ViewActions.scrollTo;
-import static androidx.test.espresso.assertion.PositionAssertions.isCompletelyBelow;
 import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.RootMatchers.isDialog;
@@ -14,6 +13,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.hasDescendant;
 import static androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withChild;
+import static androidx.test.espresso.matcher.ViewMatchers.withContentDescription;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withParent;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
@@ -352,6 +352,44 @@ public class PaymentFlowTest {
     }
 
     @Test
+    public void ridePayment_offersPaymentAppsOnlyForValidHandles() throws Exception {
+        String rideId = splitRide();
+        await(PaymentEmulator.saveHandles(emulator.organizer, "ashley-lan", "ashley"));
+        emulator.signIn(emulator.riderA);
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            waitFor(allOf(withId(R.id.payVenmoButton), withText("Pay Ashley Lan $3.33 on Venmo")));
+            onView(withId(R.id.payCashAppButton))
+                    .check(matches(withText("Pay Ashley Lan $3.33 on Cash App")));
+        }
+
+        emulator.plantHandles(emulator.organizer, "evil.com/pay", "12345");
+        emulator.signIn(emulator.riderA);
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            waitFor(withText("Your share"));
+            onView(withId(R.id.payVenmoButton)).check(matches(not(isDisplayed())));
+            onView(withId(R.id.payCashAppButton)).check(matches(not(isDisplayed())));
+            onView(withId(R.id.primaryAction)).check(matches(withText("Mark as paid")));
+        }
+    }
+
+    @Test
+    public void ridePayment_letsTheOrganizerRequestFromRidersWithVenmo() throws Exception {
+        String rideId = splitRide();
+        emulator.signIn(emulator.riderA);
+        await(PaymentEmulator.saveHandles(emulator.riderA, "kyle-t", null));
+        emulator.signIn(emulator.organizer);
+
+        try (ActivityScenario<RidePaymentActivity> screen = openRidePayment(rideId)) {
+            waitFor(shareRow("Yucheng Zhao", "Unpaid"));
+            onView(allOf(withId(R.id.shareRequest), isDisplayed())).check(matches(
+                    withContentDescription("Request $3.33 from Kyle Macasilli-Tan on Venmo")
+            ));
+        }
+    }
+
+    @Test
     public void ridePayment_updatesTheOrganizerLive() throws Exception {
         String rideId = splitRide();
 
@@ -507,14 +545,15 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void home_opensPaymentsBelowTheOtherButtons() throws Exception {
+    public void home_opensPaymentsFromTheMoneyStrip() throws Exception {
         emulator.signIn(emulator.stranger);
         Intent home = new Intent(context, MainActivity.class);
 
         try (ActivityScenario<MainActivity> screen = ActivityScenario.launch(home)) {
-            onView(withId(R.id.paymentsButton))
-                    .check(isCompletelyBelow(withId(R.id.manageRequestsButton)));
-            onView(withId(R.id.paymentsButton)).perform(click());
+            onView(withId(R.id.moneyCard)).perform(scrollTo());
+            waitFor(allOf(withId(R.id.moneyYouOwe), withText("$0.00")));
+            onView(withId(R.id.moneyOwedToYou)).check(matches(withText("$0.00")));
+            onView(withId(R.id.moneyCard)).perform(click());
             waitFor(withText(containsString("No ride costs yet")));
             pressBack();
         }

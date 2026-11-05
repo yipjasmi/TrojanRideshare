@@ -13,11 +13,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -26,10 +28,14 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.model.User;
+import com.trojanrideshare.app.service.payment.PaymentService;
 import com.trojanrideshare.app.service.ride.RideScheduleService;
+import com.trojanrideshare.app.service.validation.PaymentValidator;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.RideSeats;
+import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
@@ -63,6 +69,9 @@ public class ProfileActivity extends AppCompatActivity {
     private LinearLayout upcomingRidesListView;
     private LinearLayout completedRidesListView;
     private Button signOutButton;
+    private View paymentAppsCard;
+    private TextView paymentAppsTextView;
+    private PaymentService paymentService;
 
     private FirebaseAuth auth;
     private FirebaseFirestore db;
@@ -108,6 +117,9 @@ public class ProfileActivity extends AppCompatActivity {
         upcomingRidesListView = findViewById(R.id.upcomingRidesListView);
         completedRidesListView = findViewById(R.id.completedRidesListView);
         signOutButton = findViewById(R.id.profileSignOutButton);
+        paymentAppsCard = findViewById(R.id.profilePaymentAppsCard);
+        paymentAppsTextView = findViewById(R.id.profilePaymentAppsTextView);
+        paymentService = new PaymentService();
 
         com.google.android.material.tabs.TabLayout tabs = findViewById(R.id.profileRideTabs);
         tabs.addOnTabSelectedListener(new com.google.android.material.tabs.TabLayout.OnTabSelectedListener() {
@@ -135,6 +147,7 @@ public class ProfileActivity extends AppCompatActivity {
         if (isOwnProfile) {
             editNicknameButton.setOnClickListener(v -> showEditNicknameDialog());
             signOutButton.setOnClickListener(v -> signOut());
+            paymentAppsCard.setOnClickListener(view -> showEditPaymentAppsDialog());
             BottomNavHelper.setupBottomNav(this, R.id.nav_profile);
         } else {
             toolbar.setTitle("User Profile");
@@ -180,6 +193,9 @@ public class ProfileActivity extends AppCompatActivity {
                     emailTextView.setText(profileUser.email != null ? profileUser.email : "");
                     uscIdTextView.setText("USC ID " + (profileUser.uscId != null ? profileUser.uscId : "N/A"));
                     gradYearTextView.setText("Class of " + profileUser.gradYear);
+                    if (isOwnProfile) {
+                        showPaymentApps();
+                    }
                     loadUserRides();
                     loadFlags();
                 })
@@ -247,6 +263,88 @@ public class ProfileActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void showPaymentApps() {
+        String venmoUsername = PaymentValidator.venmoUsername(profileUser.venmoUsername).handle;
+        String cashtag = PaymentValidator.cashtag(profileUser.cashtag).handle;
+        String text;
+        if (venmoUsername != null && cashtag != null) {
+            text = getString(
+                    R.string.payment_apps_both,
+                    getString(R.string.payment_apps_venmo, venmoUsername),
+                    getString(R.string.payment_apps_cash_app, cashtag)
+            );
+        } else if (venmoUsername != null) {
+            text = getString(R.string.payment_apps_venmo, venmoUsername);
+        } else if (cashtag != null) {
+            text = getString(R.string.payment_apps_cash_app, cashtag);
+        } else {
+            text = getString(R.string.payment_apps_empty);
+        }
+        paymentAppsTextView.setText(text);
+        paymentAppsCard.setVisibility(View.VISIBLE);
+    }
+
+    private void showEditPaymentAppsDialog() {
+        if (profileUser == null) {
+            return;
+        }
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_payment_apps, null, false);
+        TextInputLayout venmoLayout = content.findViewById(R.id.paymentAppsVenmoLayout);
+        TextInputLayout cashtagLayout = content.findViewById(R.id.paymentAppsCashtagLayout);
+        EditText venmoInput = content.findViewById(R.id.paymentAppsVenmoInput);
+        EditText cashtagInput = content.findViewById(R.id.paymentAppsCashtagInput);
+        venmoInput.setText(profileUser.venmoUsername);
+        cashtagInput.setText(profileUser.cashtag);
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.payment_apps_title)
+                .setMessage(R.string.payment_apps_visibility)
+                .setView(content)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.payment_apps_save, null)
+                .create();
+        dialog.setOnShowListener(unused -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> {
+                    PaymentValidator.HandleResult venmo =
+                            PaymentValidator.venmoUsername(venmoInput.getText().toString());
+                    PaymentValidator.HandleResult cashtag =
+                            PaymentValidator.cashtag(cashtagInput.getText().toString());
+                    venmoLayout.setError(venmo.error);
+                    cashtagLayout.setError(cashtag.error);
+                    if (venmo.isValid() && cashtag.isValid()) {
+                        dialog.dismiss();
+                        savePaymentApps(venmo.handle, cashtag.handle);
+                    }
+                }));
+        dialog.show();
+    }
+
+    private void savePaymentApps(String venmoUsername, String cashtag) {
+        paymentService.saveHandles(
+                currentUserId,
+                venmoUsername,
+                cashtag,
+                new PaymentService.UpdateCallback() {
+                    @Override
+                    public void onSuccess() {
+                        profileUser.venmoUsername = venmoUsername;
+                        profileUser.cashtag = cashtag;
+                        showPaymentApps();
+                        Toast.makeText(
+                                ProfileActivity.this,
+                                R.string.payment_apps_saved,
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Toast.makeText(ProfileActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                }
+        );
+    }
+
     private void loadUserRides() {
         db.collection("rides")
                 .whereArrayContains("participantIds", targetUserId)
@@ -280,13 +378,12 @@ public class ProfileActivity extends AppCompatActivity {
         }
         RideScheduleService.Schedule schedule =
                 RideScheduleService.partition(tabRides, Timestamp.now());
-        fillList(upcomingRidesListView, upcomingEmptyTextView, schedule.upcoming, false);
-        fillList(completedRidesListView, completedEmptyTextView, schedule.completed, true);
+        fillList(upcomingRidesListView, upcomingEmptyTextView, schedule.upcoming);
+        fillList(completedRidesListView, completedEmptyTextView, schedule.completed);
     }
 
     /** Rows sit in the page itself (no inner scrolling box), separated by thin dividers. */
-    private void fillList(LinearLayout container, TextView emptyView, List<Ride> rides,
-                          boolean completedList) {
+    private void fillList(LinearLayout container, TextView emptyView, List<Ride> rides) {
         container.removeAllViews();
         emptyView.setVisibility(rides.isEmpty() ? View.VISIBLE : View.GONE);
         LayoutInflater inflater = LayoutInflater.from(this);
@@ -295,7 +392,7 @@ public class ProfileActivity extends AppCompatActivity {
                 container.addView(new com.google.android.material.divider.MaterialDivider(this));
             }
             View row = inflater.inflate(R.layout.item_profile_ride, container, false);
-            bindRideRow(row, rides.get(i), completedList);
+            bindRideRow(row, rides.get(i));
             container.addView(row);
         }
     }
@@ -331,12 +428,16 @@ public class ProfileActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-    private void bindRideRow(View row, Ride ride, boolean completedList) {
+    private void bindRideRow(View row, Ride ride) {
         ((TextView) row.findViewById(R.id.profileRideTitle)).setText(
                 ride.title == null || ride.title.trim().isEmpty() ? "Untitled ride" : ride.title);
+        TextView status = row.findViewById(R.id.profileRideStatus);
+        RideStatusChip.of(ride, Timestamp.now()).applyTo(status);
         ((TextView) row.findViewById(R.id.profileRideRoute)).setText(
                 addressOf(ride.origin) + " → " + addressOf(ride.destination));
-        ((TextView) row.findViewById(R.id.profileRideMeta)).setText(metaLine(ride, completedList));
+        ((TextView) row.findViewById(R.id.profileRideMeta)).setText(metaLine(ride));
+        TextView seats = row.findViewById(R.id.profileRideSeats);
+        RideSeats.bind(seats, ride);
 
         MaterialSwitch toggle = row.findViewById(R.id.profileRideShareSwitch);
         if (isOwnProfile) {
@@ -358,26 +459,13 @@ public class ProfileActivity extends AppCompatActivity {
         return value.resourceId;
     }
 
-    private String metaLine(Ride ride, boolean completedList) {
+    private String metaLine(Ride ride) {
         String when = ride.departureTime == null ? "Time TBD"
                 : DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                         .format(ride.departureTime.toDate());
-        String status;
-        if (Ride.STATUS_CANCELLED.equals(ride.status)) {
-            status = "Cancelled";
-        } else if (completedList) {
-            status = "Completed";
-        } else if (RideScheduleService.awaitingCompletion(ride, Timestamp.now())) {
-            status = "Departed, awaiting completion";
-        } else if (Ride.STATUS_DELAYED.equals(ride.status)) {
-            status = "Delayed";
-        } else {
-            status = "On Time";
-        }
-        int riders = ride.participantIds == null ? 0 : ride.participantIds.size();
         String role = targetUserId != null && targetUserId.equals(ride.organizerId)
                 ? (isOwnProfile ? " · You organize" : " · Organizer") : "";
-        return when + " · " + status + " · " + riders + "/" + ride.maxRiders + " riders" + role;
+        return when + role;
     }
 
     private static String addressOf(com.trojanrideshare.app.model.PlaceInfo place) {
