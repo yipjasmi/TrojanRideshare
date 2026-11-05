@@ -44,9 +44,15 @@ public class NotificationDataAccess implements NotificationRepository {
                 .addOnSuccessListener(snapshot -> {
                     List<Notification> notifications = new ArrayList<>();
                     snapshot.getDocuments().forEach(document -> {
-                        Notification notification = document.toObject(Notification.class);
-                        if (notification != null) {
-                            notifications.add(notification);
+                        // Any student can write a notification, so one with a wrong field type
+                        // is skipped instead of crashing the inbox and the Home bell.
+                        try {
+                            Notification notification = document.toObject(Notification.class);
+                            if (notification != null) {
+                                notifications.add(notification);
+                            }
+                        } catch (RuntimeException exception) {
+                            Log.w("Notifications", "Skipped a malformed notification", exception);
                         }
                     });
                     callback.onSuccess(notifications);

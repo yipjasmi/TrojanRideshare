@@ -32,7 +32,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RunWith(AndroidJUnit4.class)
 public class PaymentNotificationTest {
@@ -143,6 +145,30 @@ public class PaymentNotificationTest {
             waitFor(withText(planted.message));
             onView(withText(planted.message)).perform(click());
             onView(withText(planted.message)).check(matches(isDisplayed()));
+        }
+    }
+
+    @Test
+    public void notifications_skipsAMalformedOneInsteadOfCrashing() throws Exception {
+        emulator.signIn(emulator.riderB);
+        Map<String, Object> malformed = new HashMap<>();
+        malformed.put("userId", emulator.riderA);
+        malformed.put("type", Notification.TYPE_SHARE_FLAGGED);
+        malformed.put("message", "Malformed by another student");
+        malformed.put("createdAt", "not-a-timestamp");
+        await(firestore().collection("notifications").add(malformed));
+        Notification fine = new Notification();
+        fine.userId = emulator.riderA;
+        fine.type = Notification.TYPE_SHARE_ASSIGNED;
+        fine.message = "A well formed notification";
+        fine.createdAt = Timestamp.now();
+        await(firestore().collection("notifications").add(fine));
+        emulator.signIn(emulator.riderA);
+        Intent feed = new Intent(context, NotificationsActivity.class);
+        feed.putExtra(NotificationsActivity.EXTRA_CURRENT_USER_ID, emulator.riderA);
+
+        try (ActivityScenario<NotificationsActivity> screen = ActivityScenario.launch(feed)) {
+            waitFor(withText(fine.message));
         }
     }
 
