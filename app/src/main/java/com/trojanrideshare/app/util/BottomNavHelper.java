@@ -71,6 +71,8 @@ public class BottomNavHelper {
 
     /** Pending join requests on rides the user organizes, on the Requests tab. Hidden at zero. */
     public static void showRequestsBadge(Activity activity, int pendingRequests) {
+        // The count arrives asynchronously, possibly after the user already left this screen.
+        if (activity.isFinishing() || activity.isDestroyed()) return;
         BottomNavigationView bottomNav = activity.findViewById(R.id.bottomNavigationView);
         if (bottomNav == null) return;
 
