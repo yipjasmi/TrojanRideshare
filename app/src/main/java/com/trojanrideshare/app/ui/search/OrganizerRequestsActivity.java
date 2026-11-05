@@ -30,6 +30,7 @@ import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.InitialsAvatarView;
 import com.trojanrideshare.app.util.PullToRefresh;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
@@ -53,7 +54,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     private boolean myRequestsLoading;
     private final UserDataAccess userDataAccess = new UserDataAccess();
     private final RideMembershipDataAccess membershipDataAccess = new RideMembershipDataAccess();
-    private final Map<String, String> displayNames = new HashMap<>();
+    private final Map<String, User> requesters = new HashMap<>();
 
     private String getOrganizerId() {
         String id = getIntent().getStringExtra(EXTRA_ORGANIZER_ID);
@@ -173,14 +174,17 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         String requesterId = item.request.requesterId;
         riderView.setText(getString(R.string.organizer_request_rider, nameFor(requesterId))
                 + requestedAt(item.request));
-        if (!displayNames.containsKey(requesterId)) {
+        InitialsAvatarView avatar = view.findViewById(R.id.organizerRequestAvatar);
+        avatar.setUser(requesters.get(requesterId));
+        if (!requesters.containsKey(requesterId)) {
             userDataAccess.getById(requesterId, new UserDataAccess.SingleCallback() {
                 @Override
                 public void onSuccess(User user) {
                     if (user != null) {
-                        displayNames.put(requesterId, user.getDisplayName());
+                        requesters.put(requesterId, user);
                         riderView.setText(getString(R.string.organizer_request_rider,
                                 user.getDisplayName()) + requestedAt(item.request));
+                        avatar.setUser(user);
                     }
                 }
 
@@ -334,6 +338,7 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
             ((TextView) view.findViewById(R.id.organizerRequestRideTitle)).setText(title);
             ((TextView) view.findViewById(R.id.organizerRequestRider)).setText(
                     "Request: " + requestStatusLabel(item) + requestedAt(item.request));
+            view.findViewById(R.id.organizerRequestAvatar).setVisibility(View.GONE);
             TextView messageView = view.findViewById(R.id.organizerRequestMessage);
             if (item.request.message == null || item.request.message.trim().isEmpty()) {
                 messageView.setVisibility(View.GONE);
@@ -407,8 +412,8 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     }
 
     private String nameFor(String userId) {
-        String name = displayNames.get(userId);
-        return name != null ? name : "a student";
+        User user = requesters.get(userId);
+        return user != null ? user.getDisplayName() : "a student";
     }
 
     private static String requestedAt(JoinRequest request) {

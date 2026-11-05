@@ -20,12 +20,25 @@
             android:layout_height="wrap_content"
             android:textAppearance="?attr/textAppearanceTitleMedium" />
 
-        <TextView
-            android:id="@+id/organizerRequestRider"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.trojanrideshare.app.util.InitialsAvatarView
+                android:id="@+id/organizerRequestAvatar"
+                style="@style/InitialsAvatar"
+                android:layout_marginEnd="12dp" />
+
+            <TextView
+                android:id="@+id/organizerRequestRider"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/organizerRequestMessage"
