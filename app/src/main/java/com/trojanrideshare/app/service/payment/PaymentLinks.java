@@ -43,10 +43,33 @@ public final class PaymentLinks {
                 + "&note=" + encode(note(rideTitle));
     }
 
+    // The organizer controls the title and the rules don't cap it: a huge one would make an
+    // intent too large to start, and control or bidi characters could disguise the note.
+    static final int MAX_NOTE_TITLE_LENGTH = 60;
+
     static String note(String rideTitle) {
-        return rideTitle == null || rideTitle.trim().isEmpty()
-                ? "TrojanRideshare ride"
-                : "TrojanRideshare: " + rideTitle.trim();
+        String title = rideTitle == null ? "" : visibleText(rideTitle).trim();
+        if (title.isEmpty()) {
+            return "TrojanRideshare ride";
+        }
+        if (title.codePointCount(0, title.length()) > MAX_NOTE_TITLE_LENGTH) {
+            title = title.substring(0, title.offsetByCodePoints(0, MAX_NOTE_TITLE_LENGTH)).trim()
+                    + "…";
+        }
+        return "TrojanRideshare: " + title;
+    }
+
+    private static String visibleText(String text) {
+        StringBuilder visible = new StringBuilder();
+        text.codePoints().forEach(codePoint -> {
+            int type = Character.getType(codePoint);
+            if (type != Character.CONTROL && type != Character.FORMAT) {
+                visible.appendCodePoint(codePoint);
+            } else if (Character.isWhitespace(codePoint)) {
+                visible.append(' ');
+            }
+        });
+        return visible.toString();
     }
 
     static String encode(String text) {

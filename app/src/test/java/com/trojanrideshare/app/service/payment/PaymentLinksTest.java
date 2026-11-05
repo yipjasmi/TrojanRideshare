@@ -93,6 +93,28 @@ public class PaymentLinksTest {
     }
 
     @Test
+    public void note_capsALongTitleSoTheLinkStaysSmall() {
+        StringBuilder title = new StringBuilder();
+        StringBuilder kept = new StringBuilder();
+        for (int index = 0; index < 5000; index++) {
+            title.append('a');
+            if (index < PaymentLinks.MAX_NOTE_TITLE_LENGTH) {
+                kept.append('a');
+            }
+        }
+
+        assertEquals("TrojanRideshare: " + kept + "…", PaymentLinks.note(title.toString()));
+    }
+
+    @Test
+    public void note_dropsControlAndDirectionCharacters() {
+        assertEquals(
+                "TrojanRideshare: LAX evil run",
+                PaymentLinks.note("LAX‮ evil\nrun")
+        );
+    }
+
+    @Test
     public void venmoPay_dropsTheAtSignFromAStoredUsername() {
         assertEquals(
                 "https://venmo.com/ashley-lan?txn=pay&amount=12.50&note=TrojanRideshare%20ride",
