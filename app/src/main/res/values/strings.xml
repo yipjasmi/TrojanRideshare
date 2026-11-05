@@ -48,8 +48,33 @@
     <string name="join_request_not_pending">This request is no longer pending. The ride list was refreshed.</string>
     <string name="join_request_status_error">Unable to load your pending request status.</string>
     <string name="cancel">Cancel</string>
-    <string name="main_search_action">Find rides</string>
-    <string name="main_manage_requests_action">Manage join requests</string>
+    <string name="main_search_action">Find a ride</string>
+    <string name="main_next_ride_heading">Next ride</string>
+    <string name="main_requests_heading">Join requests</string>
+    <string name="main_no_upcoming_rides">No upcoming rides</string>
+    <string name="main_leaving_now">Leaving now</string>
+    <string name="main_leaving_in_minutes">Leaving in %1$d min</string>
+    <string name="main_leaving_in_hours">Leaving in %1$dh %2$dm</string>
+    <string name="main_leaving_in_days">Leaving in %1$dd %2$dh</string>
+    <string name="main_you_owe">You owe</string>
+    <string name="main_owed_to_you">Owed to you</string>
+    <string name="main_settled_up">All settled up</string>
+    <string name="main_no_requests_waiting">No requests waiting</string>
+    <string name="main_section_error">Couldn\'t load.</string>
+    <string name="main_try_again">Try again</string>
+    <string name="main_badge_overflow">%1$d+</string>
+    <plurals name="main_requests_waiting">
+        <item quantity="one">%d request waiting</item>
+        <item quantity="other">%d requests waiting</item>
+    </plurals>
+    <plurals name="main_notifications_unread">
+        <item quantity="one">Notifications, %d unread</item>
+        <item quantity="other">Notifications, %d unread</item>
+    </plurals>
+    <plurals name="nav_requests_badge">
+        <item quantity="one">%d pending request</item>
+        <item quantity="other">%d pending requests</item>
+    </plurals>
     <string name="back">Back</string>
     <string name="organizer_requests_title">Requests for my rides</string>
     <string name="organizer_requests_subtitle">Accepting a rider fills one seat (the organizer counts as a rider). When a ride is full, other pending requests stay pending but can\'t be accepted until a seat opens. Acceptances stop at departure.</string>

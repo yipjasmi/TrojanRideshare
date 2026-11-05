@@ -6,7 +6,6 @@ import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.action.ViewActions.closeSoftKeyboard;
 import static androidx.test.espresso.action.ViewActions.replaceText;
 import static androidx.test.espresso.action.ViewActions.scrollTo;
-import static androidx.test.espresso.assertion.PositionAssertions.isCompletelyBelow;
 import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.RootMatchers.isDialog;
@@ -507,14 +506,15 @@ public class PaymentFlowTest {
     }
 
     @Test
-    public void home_opensPaymentsBelowTheOtherButtons() throws Exception {
+    public void home_opensPaymentsFromTheMoneyStrip() throws Exception {
         emulator.signIn(emulator.stranger);
         Intent home = new Intent(context, MainActivity.class);
 
         try (ActivityScenario<MainActivity> screen = ActivityScenario.launch(home)) {
-            onView(withId(R.id.paymentsButton))
-                    .check(isCompletelyBelow(withId(R.id.manageRequestsButton)));
-            onView(withId(R.id.paymentsButton)).perform(click());
+            onView(withId(R.id.moneyCard)).perform(scrollTo());
+            waitFor(allOf(withId(R.id.moneyYouOwe), withText("$0.00")));
+            onView(withId(R.id.moneyOwedToYou)).check(matches(withText("$0.00")));
+            onView(withId(R.id.moneyCard)).perform(click());
             waitFor(withText(containsString("No ride costs yet")));
             pressBack();
         }
