@@ -14,27 +14,33 @@
         app:navigationIcon="?attr/homeAsUpIndicator"
         app:title="@string/payment_title" />
 
-    <ScrollView
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/paymentsRefresh"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingHorizontal="16dp"
-            android:paddingBottom="24dp">
+            android:layout_height="match_parent">
 
-            <include layout="@layout/view_payment_state" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingBottom="24dp">
 
-            <include
-                android:id="@+id/sharesSection"
-                layout="@layout/view_payment_section" />
+                <include layout="@layout/view_payment_state" />
 
-            <include
-                android:id="@+id/ridesSection"
-                layout="@layout/view_payment_section" />
-        </LinearLayout>
-    </ScrollView>
+                <include
+                    android:id="@+id/sharesSection"
+                    layout="@layout/view_payment_section" />
+
+                <include
+                    android:id="@+id/ridesSection"
+                    layout="@layout/view_payment_section" />
+            </LinearLayout>
+        </ScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 </LinearLayout>

@@ -15,6 +15,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -34,6 +35,7 @@ import com.trojanrideshare.app.service.validation.PaymentValidator;
 import com.trojanrideshare.app.ui.auth.LoginActivity;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.PullToRefresh;
 import com.trojanrideshare.app.util.RideSeats;
 import com.trojanrideshare.app.util.RideStatusChip;
 import com.trojanrideshare.app.util.SystemBarsHelper;
@@ -54,6 +56,7 @@ public class ProfileActivity extends AppCompatActivity {
     private static final int MAX_NICKNAME_LENGTH = 30;
 
     private MaterialToolbar toolbar;
+    private SwipeRefreshLayout refreshLayout;
     private TextView nameTextView;
     private TextView nicknameTextView;
     private TextView emailTextView;
@@ -102,6 +105,7 @@ public class ProfileActivity extends AppCompatActivity {
         targetUserId = isOwnProfile ? currentUserId : extraUserId;
 
         toolbar = findViewById(R.id.profileToolbar);
+        refreshLayout = findViewById(R.id.profileRefresh);
         nameTextView = findViewById(R.id.profileNameTextView);
         nicknameTextView = findViewById(R.id.profileNicknameTextView);
         emailTextView = findViewById(R.id.profileEmailTextView);
@@ -120,6 +124,7 @@ public class ProfileActivity extends AppCompatActivity {
         paymentAppsCard = findViewById(R.id.profilePaymentAppsCard);
         paymentAppsTextView = findViewById(R.id.profilePaymentAppsTextView);
         paymentService = new PaymentService();
+        PullToRefresh.setUp(refreshLayout, this::loadProfileThenRides);
 
         com.google.android.material.tabs.TabLayout tabs = findViewById(R.id.profileRideTabs);
         tabs.addOnTabSelectedListener(new com.google.android.material.tabs.TabLayout.OnTabSelectedListener() {
@@ -183,6 +188,7 @@ public class ProfileActivity extends AppCompatActivity {
                     if (profileUser == null) {
                         nameTextView.setText("Profile not found");
                         nicknameTextView.setText("Nickname: N/A");
+                        refreshLayout.setRefreshing(false);
                         return;
                     }
                     if (profileUser.sharedRideIds == null) {
@@ -199,8 +205,10 @@ public class ProfileActivity extends AppCompatActivity {
                     loadUserRides();
                     loadFlags();
                 })
-                .addOnFailureListener(e ->
-                        Toast.makeText(this, "Failed to load profile", Toast.LENGTH_SHORT).show());
+                .addOnFailureListener(e -> {
+                    refreshLayout.setRefreshing(false);
+                    Toast.makeText(this, "Failed to load profile", Toast.LENGTH_SHORT).show();
+                });
     }
 
     /** Shows a warning when an organizer has flagged one of this user's unpaid shares. */
@@ -362,9 +370,12 @@ public class ProfileActivity extends AppCompatActivity {
                     loadedRides.clear();
                     loadedRides.addAll(rides);
                     renderRides();
+                    refreshLayout.setRefreshing(false);
                 })
-                .addOnFailureListener(e ->
-                        Toast.makeText(this, "Failed to load rides", Toast.LENGTH_SHORT).show());
+                .addOnFailureListener(e -> {
+                    refreshLayout.setRefreshing(false);
+                    Toast.makeText(this, "Failed to load rides", Toast.LENGTH_SHORT).show();
+                });
     }
 
     /** Shows the selected tab: rides this user created, or rides they joined. */

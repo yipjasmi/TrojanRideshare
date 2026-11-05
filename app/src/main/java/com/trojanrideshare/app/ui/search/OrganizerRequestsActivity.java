@@ -12,6 +12,7 @@ import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -29,6 +30,7 @@ import com.trojanrideshare.app.model.User;
 import com.trojanrideshare.app.ui.ride.RideDetailActivity;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
 import com.trojanrideshare.app.util.BottomNavHelper;
+import com.trojanrideshare.app.util.PullToRefresh;
 import com.trojanrideshare.app.util.SystemBarsHelper;
 
 import java.text.DateFormat;
@@ -46,6 +48,9 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     private String organizerId;
     private TextView myRequestsStatus;
     private LinearLayout myRequestsContainer;
+    private SwipeRefreshLayout refreshLayout;
+    private boolean requestsLoading;
+    private boolean myRequestsLoading;
     private final UserDataAccess userDataAccess = new UserDataAccess();
     private final RideMembershipDataAccess membershipDataAccess = new RideMembershipDataAccess();
     private final Map<String, String> displayNames = new HashMap<>();
@@ -74,6 +79,8 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
         myRequestsStatus = findViewById(R.id.myRequestsStatus);
         myRequestsContainer = findViewById(R.id.myRequestsContainer);
         organizerId = getOrganizerId();
+        refreshLayout = findViewById(R.id.organizerRequestsRefresh);
+        PullToRefresh.setUp(refreshLayout, this::loadAll);
 
         MaterialToolbar toolbar = findViewById(R.id.organizerRequestsToolbar);
         toolbar.setNavigationOnClickListener(view -> navigateToHome());
@@ -89,8 +96,18 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        loadAll();
+    }
+
+    private void loadAll() {
         loadRequests();
         loadMyRequests();
+    }
+
+    private void stopRefreshingWhenSettled() {
+        if (!requestsLoading && !myRequestsLoading) {
+            refreshLayout.setRefreshing(false);
+        }
     }
 
     private void loadRequests() {
@@ -115,10 +132,14 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
     }
 
     private void setLoading(boolean loading) {
-        loadingIndicator.setVisibility(loading ? View.VISIBLE : View.GONE);
+        requestsLoading = loading;
+        loadingIndicator.setVisibility(
+                loading && !refreshLayout.isRefreshing() ? View.VISIBLE : View.GONE);
         if (loading) {
             statusMessage.setVisibility(View.GONE);
             requestsContainer.removeAllViews();
+        } else {
+            stopRefreshingWhenSettled();
         }
     }
 
@@ -277,17 +298,22 @@ public class OrganizerRequestsActivity extends AppCompatActivity {
 
     private void loadMyRequests() {
         if (organizerId == null) return;
+        myRequestsLoading = true;
         membershipDataAccess.loadMyRequests(organizerId, new RideMembershipDataAccess.RequestsCallback() {
             @Override
             public void onSuccess(List<OrganizerJoinRequest> requests) {
+                myRequestsLoading = false;
                 renderMyRequests(requests);
+                stopRefreshingWhenSettled();
             }
 
             @Override
             public void onError(Exception exception) {
+                myRequestsLoading = false;
                 myRequestsContainer.removeAllViews();
                 myRequestsStatus.setText("Unable to load your requests.");
                 myRequestsStatus.setVisibility(View.VISIBLE);
+                stopRefreshingWhenSettled();
             }
         });
     }
