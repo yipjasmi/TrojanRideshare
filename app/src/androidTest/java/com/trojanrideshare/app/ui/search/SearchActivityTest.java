@@ -79,4 +79,30 @@ public class SearchActivityTest {
             onView(withId(R.id.seatsIncreaseButton)).check(matches(isEnabled()));
         }
     }
+
+    @Test
+    public void search_requiresAtLeastOneRideStatus() {
+        Context context = ApplicationProvider.getApplicationContext();
+        Intent intent = new Intent(context, SearchActivity.class);
+        intent.putExtra(SearchActivity.EXTRA_CURRENT_USER_ID, CURRENT_USER_ID);
+
+        try (ActivityScenario<SearchActivity> screen = ActivityScenario.launch(intent)) {
+            onView(withId(R.id.originSearchInput)).perform(
+                    replaceText("USC"),
+                    closeSoftKeyboard()
+            );
+            onView(withId(R.id.destinationSearchInput)).perform(
+                    replaceText("LAX"),
+                    closeSoftKeyboard()
+            );
+            onView(withId(R.id.statusOnTimeCheckBox)).perform(scrollTo(), click());
+            onView(withId(R.id.statusDelayedCheckBox)).perform(click());
+            onView(withId(R.id.searchButton)).perform(scrollTo(), click());
+
+            onView(allOf(
+                    withId(R.id.searchResultMessage),
+                    withText("Select On Time, Delayed, or both.")
+            )).perform(scrollTo()).check(matches(isDisplayed()));
+        }
+    }
 }
