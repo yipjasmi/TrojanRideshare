@@ -8,9 +8,11 @@ import static androidx.test.espresso.action.ViewActions.scrollTo;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.hasErrorText;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
+import static androidx.test.espresso.matcher.ViewMatchers.isEnabled;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.not;
 
 import android.content.Context;
 import android.content.Intent;
@@ -48,6 +50,33 @@ public class SearchActivityTest {
                     withId(R.id.searchResultMessage),
                     withText("Enter both an origin keyword and a destination keyword.")
             )).perform(scrollTo()).check(matches(isDisplayed()));
+        }
+    }
+
+    @Test
+    public void seatFilter_stopsAtFiveAndClearsToAny() {
+        Context context = ApplicationProvider.getApplicationContext();
+        Intent intent = new Intent(context, SearchActivity.class);
+        intent.putExtra(SearchActivity.EXTRA_CURRENT_USER_ID, CURRENT_USER_ID);
+
+        try (ActivityScenario<SearchActivity> screen = ActivityScenario.launch(intent)) {
+            onView(withId(R.id.seatsIncreaseButton)).perform(
+                    scrollTo(),
+                    click(),
+                    click(),
+                    click(),
+                    click(),
+                    click()
+            );
+
+            onView(withId(R.id.seatsValueText)).check(matches(withText("5+")));
+            onView(withId(R.id.seatsIncreaseButton)).check(matches(not(isEnabled())));
+
+            onView(withId(R.id.clearFiltersButton)).perform(scrollTo(), click());
+
+            onView(withId(R.id.seatsValueText)).check(matches(withText("Any")));
+            onView(withId(R.id.seatsDecreaseButton)).check(matches(not(isEnabled())));
+            onView(withId(R.id.seatsIncreaseButton)).check(matches(isEnabled()));
         }
     }
 }
