@@ -237,6 +237,54 @@ public class JoinRequestServiceTest {
         );
     }
 
+    @Test
+    public void loadOrganizerRequests_trimsIdentifierAndMapsRepositoryError() {
+        FakeRepository repository = new FakeRepository();
+        OrganizerJoinRequest request = new OrganizerJoinRequest(
+                new JoinRequest(),
+                availableRide()
+        );
+        repository.organizerRequests = Collections.singletonList(request);
+        OrganizerResult success = new OrganizerResult();
+
+        new JoinRequestService(repository).loadOrganizerRequests("  organizer  ", success);
+
+        assertEquals("organizer", repository.loadedOrganizerId);
+        assertEquals(Collections.singletonList(request), success.requests);
+        assertNull(success.error);
+
+        FakeRepository failingRepository = new FakeRepository();
+        failingRepository.organizerException = new IllegalStateException("network");
+        OrganizerResult failure = new OrganizerResult();
+
+        new JoinRequestService(failingRepository).loadOrganizerRequests("organizer", failure);
+
+        assertEquals("Unable to load join requests.", failure.error);
+    }
+
+    @Test
+    public void accept_mapsDepartedAndUnexpectedRepositoryFailures() {
+        FakeRepository departedRepository = new FakeRepository();
+        departedRepository.decisionFailure = JoinRequestRepository.Failure.RIDE_DEPARTED;
+        DecisionResult departed = new DecisionResult();
+
+        new JoinRequestService(departedRepository).accept(
+                "ride-1", REQUESTER_ID, "organizer", departed
+        );
+
+        assertEquals(JoinRequestService.MESSAGE_DEPARTED, departed.unavailableMessage);
+
+        FakeRepository failingRepository = new FakeRepository();
+        failingRepository.decisionException = new IllegalStateException("network");
+        DecisionResult failure = new DecisionResult();
+
+        new JoinRequestService(failingRepository).accept(
+                "ride-1", REQUESTER_ID, "organizer", failure
+        );
+
+        assertEquals("Unable to update this request. Please try again.", failure.error);
+    }
+
     private static void assertValidationError(Ride ride, String requesterId) {
         FakeRepository repository = new FakeRepository();
         Result result = new Result();
@@ -275,11 +323,15 @@ public class JoinRequestServiceTest {
         private Exception cancelException;
         private Set<String> pendingRideIds = Collections.emptySet();
         private Exception pendingException;
+        private String loadedOrganizerId;
+        private List<OrganizerJoinRequest> organizerRequests = Collections.emptyList();
+        private Exception organizerException;
         private String acceptedRideId;
         private String acceptedRequesterId;
         private String rejectedRideId;
         private String decisionOrganizerId;
         private Failure decisionFailure;
+        private Exception decisionException;
 
         @Override
         public void submit(JoinRequest request, Callback callback) {
@@ -327,7 +379,12 @@ public class JoinRequestServiceTest {
                 String organizerId,
                 OrganizerRequestsCallback callback
         ) {
-            callback.onSuccess(Collections.<OrganizerJoinRequest>emptyList());
+            loadedOrganizerId = organizerId;
+            if (organizerException != null) {
+                callback.onError(organizerException);
+            } else {
+                callback.onSuccess(organizerRequests);
+            }
         }
 
         @Override
@@ -356,7 +413,9 @@ public class JoinRequestServiceTest {
         }
 
         private void completeDecision(DecisionCallback callback) {
-            if (decisionFailure == null) {
+            if (decisionException != null) {
+                callback.onError(decisionException);
+            } else if (decisionFailure == null) {
                 callback.onSuccess();
             } else {
                 callback.onFailure(decisionFailure);
@@ -414,6 +473,22 @@ public class JoinRequestServiceTest {
         @Override
         public void onSuccess(Set<String> result) {
             rideIds = result;
+        }
+
+        @Override
+        public void onError(String message) {
+            error = message;
+        }
+    }
+
+    private static final class OrganizerResult
+            implements JoinRequestService.OrganizerRequestsCallback {
+        private List<OrganizerJoinRequest> requests;
+        private String error;
+
+        @Override
+        public void onSuccess(List<OrganizerJoinRequest> result) {
+            requests = result;
         }
 
         @Override

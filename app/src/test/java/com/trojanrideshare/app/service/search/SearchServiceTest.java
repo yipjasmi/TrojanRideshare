@@ -329,6 +329,81 @@ public class SearchServiceTest {
                 Arrays.asList(onTime, delayed), delayedOnly, CURRENT_USER));
     }
 
+    @Test
+    public void filterRides_overnightWindowSpansMidnight() {
+        Ride lateNight = timedRide("late-night", 2026, Calendar.NOVEMBER, 2, 23, 30, 4, 1);
+        Ride earlyMorning = timedRide("early-morning", 2026, Calendar.NOVEMBER, 3, 1, 30, 4, 1);
+        Ride midday = timedRide("midday", 2026, Calendar.NOVEMBER, 3, 12, 0, 4, 1);
+
+        SearchCriteria overnight = criteria(
+                null,
+                null,
+                0,
+                null,
+                null,
+                22 * 60,
+                2 * 60,
+                0,
+                SortOption.DEPARTURE_EARLIEST
+        );
+
+        assertEquals(
+                Arrays.asList(lateNight, earlyMorning),
+                SearchService.filterRides(
+                        Arrays.asList(midday, earlyMorning, lateNight),
+                        overnight,
+                        CURRENT_USER
+                )
+        );
+    }
+
+    @Test
+    public void filterRides_distanceWithoutReferenceReturnsNoRides() {
+        Ride ride = timedRide("ride", 2026, Calendar.NOVEMBER, 2, 10, 0, 4, 1);
+        SearchCriteria missingReference = criteria(
+                null,
+                null,
+                5,
+                null,
+                null,
+                null,
+                null,
+                0,
+                SortOption.ROUTE_PROXIMITY
+        );
+
+        assertEquals(
+                Collections.emptyList(),
+                SearchService.filterRides(
+                        Collections.singletonList(ride),
+                        missingReference,
+                        CURRENT_USER
+                )
+        );
+    }
+
+    @Test
+    public void filterRides_handlesNullInputsAndNullCriteria() {
+        Ride ride = timedRide("ride", 2026, Calendar.NOVEMBER, 2, 10, 0, 4, 1);
+
+        assertEquals(
+                Collections.singletonList(ride),
+                SearchService.filterRides(Collections.singletonList(ride), null, CURRENT_USER)
+        );
+        assertEquals(
+                Collections.emptyList(),
+                SearchService.filterRides(null, new SearchCriteria("", ""), CURRENT_USER)
+        );
+        assertEquals(
+                Collections.emptyList(),
+                SearchService.filterRides(
+                        Collections.singletonList(ride),
+                        new SearchCriteria("", ""),
+                        null
+                )
+        );
+    }
+
     private static Ride ride(
             String id,
             String origin,
