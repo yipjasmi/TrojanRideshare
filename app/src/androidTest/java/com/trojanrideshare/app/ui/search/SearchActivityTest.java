@@ -1,5 +1,6 @@
 package com.trojanrideshare.app.ui.search;
 
+import static androidx.test.espresso.Espresso.onData;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.action.ViewActions.closeSoftKeyboard;
@@ -7,11 +8,14 @@ import static androidx.test.espresso.action.ViewActions.replaceText;
 import static androidx.test.espresso.action.ViewActions.scrollTo;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.hasErrorText;
+import static androidx.test.espresso.matcher.ViewMatchers.isChecked;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.isEnabled;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
+import static androidx.test.espresso.matcher.ViewMatchers.withSpinnerText;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.anything;
 import static org.hamcrest.CoreMatchers.not;
 
 import android.content.Context;
@@ -131,6 +135,45 @@ public class SearchActivityTest {
 
             onView(withId(R.id.maximumDistanceInput)).check(matches(hasErrorText(
                     "Enter a maximum distance greater than zero."
+            )));
+        }
+    }
+
+    @Test
+    public void clearFilters_restoresSearchDefaults() {
+        Context context = ApplicationProvider.getApplicationContext();
+        Intent intent = new Intent(context, SearchActivity.class);
+        intent.putExtra(SearchActivity.EXTRA_CURRENT_USER_ID, CURRENT_USER_ID);
+
+        try (ActivityScenario<SearchActivity> screen = ActivityScenario.launch(intent)) {
+            onView(withId(R.id.timeFilterCheckBox)).perform(scrollTo(), click());
+            onView(withId(R.id.distanceFilterCheckBox)).perform(scrollTo(), click());
+            onView(withId(R.id.maximumDistanceInput)).perform(
+                    scrollTo(),
+                    replaceText("12"),
+                    closeSoftKeyboard()
+            );
+            onView(withId(R.id.statusOnTimeCheckBox)).perform(scrollTo(), click());
+            onView(withId(R.id.sortSpinner)).perform(scrollTo(), click());
+            onData(anything()).atPosition(1).perform(click());
+            onView(withId(R.id.sortSpinner)).check(matches(withSpinnerText(
+                    "Latest departure"
+            )));
+
+            onView(withId(R.id.clearFiltersButton)).perform(scrollTo(), click());
+
+            onView(withId(R.id.timeFilterCheckBox)).check(matches(not(isChecked())));
+            onView(withId(R.id.startTimeButton)).check(matches(not(isEnabled())));
+            onView(withId(R.id.endTimeButton)).check(matches(not(isEnabled())));
+            onView(withId(R.id.distanceFilterCheckBox)).check(matches(not(isChecked())));
+            onView(withId(R.id.maximumDistanceInput)).check(matches(allOf(
+                    withText(""),
+                    not(isEnabled())
+            )));
+            onView(withId(R.id.statusOnTimeCheckBox)).check(matches(isChecked()));
+            onView(withId(R.id.statusDelayedCheckBox)).check(matches(isChecked()));
+            onView(withId(R.id.sortSpinner)).check(matches(withSpinnerText(
+                    "Earliest departure"
             )));
         }
     }
