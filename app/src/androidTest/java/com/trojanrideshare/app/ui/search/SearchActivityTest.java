@@ -105,4 +105,33 @@ public class SearchActivityTest {
             )).perform(scrollTo()).check(matches(isDisplayed()));
         }
     }
+
+    @Test
+    public void distanceFilter_rejectsZeroMiles() {
+        Context context = ApplicationProvider.getApplicationContext();
+        Intent intent = new Intent(context, SearchActivity.class);
+        intent.putExtra(SearchActivity.EXTRA_CURRENT_USER_ID, CURRENT_USER_ID);
+
+        try (ActivityScenario<SearchActivity> screen = ActivityScenario.launch(intent)) {
+            onView(withId(R.id.originSearchInput)).perform(
+                    replaceText("USC"),
+                    closeSoftKeyboard()
+            );
+            onView(withId(R.id.destinationSearchInput)).perform(
+                    replaceText("LAX"),
+                    closeSoftKeyboard()
+            );
+            onView(withId(R.id.distanceFilterCheckBox)).perform(scrollTo(), click());
+            onView(withId(R.id.maximumDistanceInput)).perform(
+                    scrollTo(),
+                    replaceText("0"),
+                    closeSoftKeyboard()
+            );
+            onView(withId(R.id.searchButton)).perform(scrollTo(), click());
+
+            onView(withId(R.id.maximumDistanceInput)).check(matches(hasErrorText(
+                    "Enter a maximum distance greater than zero."
+            )));
+        }
+    }
 }
