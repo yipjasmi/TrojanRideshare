@@ -94,4 +94,38 @@ public class CreateRideActivityTest {
         }
     }
 
+
+    @Test
+    public void createRide_rejectsZeroAndNegativeCost() {
+        try (ActivityScenario<CreateRideActivity> screen = open()) {
+            type(R.id.costInput, "0");
+            submit();
+            assertError(R.id.costError, RideValidator.ERROR_COST_ZERO);
+
+            type(R.id.costInput, "-5");
+            submit();
+            assertError(R.id.costError, RideValidator.ERROR_COST_NEGATIVE);
+
+            type(R.id.costInput, "0.01");
+            submit();
+            assertNoError(R.id.costError);
+        }
+    }
+
+    @Test
+    public void createRide_rejectsCostThatIsNotADollarAmount() {
+        try (ActivityScenario<CreateRideActivity> screen = open()) {
+            type(R.id.costInput, "12.505");
+            submit();
+            assertError(R.id.costError, RideValidator.ERROR_COST_DECIMALS);
+
+            type(R.id.costInput, "twelve");
+            submit();
+            assertError(R.id.costError, RideValidator.ERROR_COST_INVALID);
+
+            type(R.id.costInput, "$1,234.50");
+            submit();
+            assertNoError(R.id.costError);
+        }
+    }
 }
