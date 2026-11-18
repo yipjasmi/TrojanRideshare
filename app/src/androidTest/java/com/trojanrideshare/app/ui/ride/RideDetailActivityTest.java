@@ -13,6 +13,7 @@ import static com.trojanrideshare.app.payment.PaymentEmulator.firestore;
 import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
 import android.content.Intent;
@@ -28,6 +29,7 @@ import com.trojanrideshare.app.R;
 import com.trojanrideshare.app.model.Ride;
 import com.trojanrideshare.app.payment.PaymentEmulator;
 import com.trojanrideshare.app.service.joinrequest.JoinRequestService;
+import com.trojanrideshare.app.service.ride.LeaveRideService;
 
 import org.hamcrest.Matcher;
 import org.junit.Before;
@@ -153,4 +155,37 @@ public class RideDetailActivityTest {
         }
     }
 
+
+    @Test
+    public void rideDetail_organizerCanEditAndCancelButNotJoin() throws Exception {
+        String rideId = rideLeavingIn(ONE_DAY);
+
+        try (ActivityScenario<RideDetailActivity> screen = open(rideId, emulator.organizer)) {
+            waitForShown(info(context.getString(R.string.ride_detail_badge_organizer)));
+            waitForShown(withId(R.id.editRideButton));
+            waitForShown(withId(R.id.cancelRideButton));
+            onView(withId(R.id.joinButton)).check(matches(not(isDisplayed())));
+            onView(withId(R.id.completeRideButton)).check(matches(not(isDisplayed())));
+        }
+    }
+
+    @Test
+    public void rideDetail_riderCannotLeaveWithinThreeHoursOfDeparture() throws Exception {
+        String rideId = rideLeavingIn(TimeUnit.HOURS.toMillis(2));
+
+        try (ActivityScenario<RideDetailActivity> screen = open(rideId, emulator.riderA)) {
+            waitForShown(withId(R.id.leaveRideButton));
+            onView(withId(R.id.leaveRideButton)).perform(scrollTo(), click());
+
+            onView(withText("Can't leave this ride")).inRoot(isDialog())
+                    .check(matches(isDisplayed()));
+            onView(withText(LeaveRideService.REASON_TOO_LATE)).inRoot(isDialog())
+                    .check(matches(isDisplayed()));
+            onView(withText(android.R.string.ok)).inRoot(isDialog()).perform(click());
+        }
+
+        List<?> participants = (List<?>) await(firestore().collection("rides")
+                .document(rideId).get()).get("participantIds");
+        assertTrue(participants.contains(emulator.riderA));
+    }
 }
