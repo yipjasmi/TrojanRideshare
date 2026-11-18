@@ -33,6 +33,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // JaCoCo report for the JUnit suite:
+            //   ./gradlew createDebugUnitTestCoverageReport
+            //   -> app/build/reports/coverage/test/debug/index.html
+            enableUnitTestCoverage = true
+        }
         release {
             optimization {
                 enable = false

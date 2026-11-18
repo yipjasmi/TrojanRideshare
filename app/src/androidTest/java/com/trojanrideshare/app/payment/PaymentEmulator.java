@@ -47,9 +47,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
+// Shared by the payment and ride detail instrumented tests.
 // Skips the tests unless these are running on the host:
 //   firebase emulators:start --only auth,firestore --project demo-trojanrideshare
-final class PaymentEmulator {
+public final class PaymentEmulator {
     private static final String HOST = "10.0.2.2";
     private static final int AUTH_PORT = 9099;
     private static final int FIRESTORE_PORT = 8080;
@@ -57,10 +58,10 @@ final class PaymentEmulator {
 
     static final String PASSWORD = "test-password";
 
-    final String organizer;
-    final String riderA;
-    final String riderB;
-    final String stranger;
+    public final String organizer;
+    public final String riderA;
+    public final String riderB;
+    public final String stranger;
     private final Map<String, String> emails = new HashMap<>();
 
     private PaymentEmulator() throws Exception {
@@ -70,7 +71,7 @@ final class PaymentEmulator {
         stranger = newUser("Someone Else");
     }
 
-    static PaymentEmulator start() throws Exception {
+    public static PaymentEmulator start() throws Exception {
         // Only the first test can skip. Once connected, a network blip has to fail loudly, or a
         // security test quietly drops out of a run that still reports success.
         assumeTrue("Firebase emulators are not running", connected || reachable(FIRESTORE_PORT));
@@ -190,11 +191,11 @@ final class PaymentEmulator {
         };
     }
 
-    static <T> T await(Task<T> task) throws Exception {
+    public static <T> T await(Task<T> task) throws Exception {
         return Tasks.await(task, 15, TimeUnit.SECONDS);
     }
 
-    static FirebaseFirestore firestore() {
+    public static FirebaseFirestore firestore() {
         return FirebaseFirestore.getInstance();
     }
 
@@ -213,7 +214,7 @@ final class PaymentEmulator {
         return uid;
     }
 
-    void signIn(String uid) throws Exception {
+    public void signIn(String uid) throws Exception {
         signInWithGoogle(emails.get(uid));
     }
 
@@ -243,7 +244,7 @@ final class PaymentEmulator {
 
     // The rides rules only let the app post a fresh On Time ride with the organizer alone, so the
     // ride is posted that way and then moved to the state the test needs with the admin token.
-    String seedRide(String status, List<String> riders) throws Exception {
+    public String seedRide(String status, List<String> riders) throws Exception {
         signIn(organizer);
         DocumentReference ride = firestore().collection("rides").document();
         Map<String, Object> fields = new HashMap<>();
@@ -262,7 +263,7 @@ final class PaymentEmulator {
         return ride.getId();
     }
 
-    void moveDeparture(String rideId, long fromNowMillis) throws Exception {
+    public void moveDeparture(String rideId, long fromNowMillis) throws Exception {
         adminUpdate("rides/" + rideId,
                 "\"departureTime\":" + timestamp(System.currentTimeMillis() + fromNowMillis),
                 "\"departureTime\"");
