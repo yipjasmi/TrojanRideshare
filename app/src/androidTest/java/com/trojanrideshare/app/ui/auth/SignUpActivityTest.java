@@ -10,6 +10,9 @@ import static androidx.test.espresso.matcher.ViewMatchers.hasErrorText;
 import static androidx.test.espresso.matcher.ViewMatchers.isEnabled;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 
+import android.os.Build;
+import android.view.View;
+
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
@@ -27,6 +30,20 @@ import java.util.Calendar;
 @RunWith(AndroidJUnit4.class)
 public class SignUpActivityTest {
     private static final int CURRENT_YEAR = Calendar.getInstance().get(Calendar.YEAR);
+
+    /**
+     * Opens sign-up with Android's autofill turned off for the screen. Otherwise, after a test
+     * types into the password fields, the system "Save password?" sheet can cover the next test's
+     * screen and Espresso times out waiting for window focus.
+     */
+    private static ActivityScenario<SignUpActivity> open() {
+        ActivityScenario<SignUpActivity> screen = ActivityScenario.launch(SignUpActivity.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            screen.onActivity(activity -> activity.getWindow().getDecorView()
+                    .setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS));
+        }
+        return screen;
+    }
 
     private static void type(int viewId, String text) {
         onView(withId(viewId)).perform(scrollTo(), replaceText(text), closeSoftKeyboard());
@@ -48,8 +65,7 @@ public class SignUpActivityTest {
 
     @Test
     public void signUp_rejectsNonUscEmails() {
-        try (ActivityScenario<SignUpActivity> screen =
-                     ActivityScenario.launch(SignUpActivity.class)) {
+        try (ActivityScenario<SignUpActivity> screen = open()) {
             fillValidForm();
 
             type(R.id.signUpEmailEditText, "ttrojan@gmail.com");
@@ -67,8 +83,7 @@ public class SignUpActivityTest {
 
     @Test
     public void signUp_requiresExactlyTenDigitUscId() {
-        try (ActivityScenario<SignUpActivity> screen =
-                     ActivityScenario.launch(SignUpActivity.class)) {
+        try (ActivityScenario<SignUpActivity> screen = open()) {
             fillValidForm();
 
             type(R.id.signUpUscIdEditText, "123456789");
@@ -85,8 +100,7 @@ public class SignUpActivityTest {
 
     @Test
     public void signUp_rejectsMismatchedPasswords() {
-        try (ActivityScenario<SignUpActivity> screen =
-                     ActivityScenario.launch(SignUpActivity.class)) {
+        try (ActivityScenario<SignUpActivity> screen = open()) {
             fillValidForm();
 
             type(R.id.signUpConfirmPasswordEditText, "fighton2");
@@ -102,8 +116,7 @@ public class SignUpActivityTest {
         String expected = "Graduation year must be between "
                 + CURRENT_YEAR + " and " + (CURRENT_YEAR + 6);
 
-        try (ActivityScenario<SignUpActivity> screen =
-                     ActivityScenario.launch(SignUpActivity.class)) {
+        try (ActivityScenario<SignUpActivity> screen = open()) {
             fillValidForm();
 
             type(R.id.signUpGradYearEditText, String.valueOf(CURRENT_YEAR - 1));
